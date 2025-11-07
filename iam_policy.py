@@ -18,8 +18,8 @@ for policy in policy_list_allinfo:
     policy_arn = policy['Arn']
     policy_name = policy['PolicyName']
     policy_id = policy['PolicyId']
-    policy_create-date = policy['CreateDate']
-    policy_updaate-date = policy['UpdateDate']
+#    policy_create-date = policy['CreateDate']
+#    policy_update-date = policy['UpdateDate']
     scan_time = datetime.now()
 
     policy_list.append(policy['PolicyId']) ##this list policy_id will contain all policy id
