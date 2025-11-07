@@ -24,4 +24,10 @@ for policy in policy_list_allinfo:
 
     policy_list.append(policy['PolicyId']) ##this list policy_id will contain all policy id
 
+    if policy_arn.startswith("arn:aws:iam::aws:policy/"):
+         policy_type = "aws_managed"
+    else:
+         policy_type = "customer_managed"
+
+
 print(policy_list)
