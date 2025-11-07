@@ -36,7 +36,7 @@ for policy in policy_list_allinfo:
     entity_list.append(iam.list_entities_for_policy(PolicyArn=policy_arn)['PolicyUsers'])
     entity_list.append(iam.list_entities_for_policy(PolicyArn=policy_arn)['PolicyRoles'])
 
-    iam_data.append(policy_arn, policy_name, policy_id, policy_type, entity_list, scan_time)
+    iam_data.append((policy_arn, policy_name, policy_id, policy_type, entity_list, scan_time))
 
 
 print(iam_data)
