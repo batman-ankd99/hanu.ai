@@ -9,4 +9,6 @@ import os
 load_dotenv(".env.prod")
 
 iam = boto3.client('iam')
-response = iam.get_policy    
+response = iam.list_policies()
+
+print(response)
