@@ -29,5 +29,8 @@ for policy in policy_list_allinfo:
     else:
          policy_type = "customer_managed"
 
+    entity_policy = iam.list_entities_for_policy(PolicyArn=policy_arn)
+    print(entity_policy)
 
-print(policy_list)
+
+#print(policy_list)
