@@ -1,48 +1,59 @@
 import boto3
-import psycopg2 #to connect to postgres
 from datetime import datetime
-from dotenv import load_dotenv #to load .env files key value in enviroment of app
+from dotenv import load_dotenv
 import os
+import json
 
-
-"""Collect AWS IAM Custom Policies details and store them in PostgreSQL."""
+# Load environment variables
 load_dotenv(".env.prod")
 
 iam = boto3.client('iam')
-response = iam.list_policies()
 
-#print(response['Policies'])
+response = iam.list_policies(Scope='All')
+
 policy_list = []
 iam_data = []
+
 policy_list_allinfo = response['Policies']
+
 for policy in policy_list_allinfo:
     policy_arn = policy['Arn']
     policy_name = policy['PolicyName']
     policy_id = policy['PolicyId']
-#    policy_create-date = policy['CreateDate']
-#    policy_update-date = policy['UpdateDate']
+    create_date = policy.get('CreateDate')
+    update_date = policy.get('UpdateDate')
     scan_time = datetime.now()
 
-    policy_list.append(policy['PolicyId']) ##this list policy_id will contain all policy id
-
+    # Determine policy type
     if policy_arn.startswith("arn:aws:iam::aws:policy/"):
-         policy_type = "aws_managed"
+        policy_type = "aws_managed"
     else:
-         policy_type = "customer_managed"
+        policy_type = "customer_managed"
 
-    entity_list = []
+    # Collect attached entities (groups, users, roles)
+    entities = iam.list_entities_for_policy(PolicyArn=policy_arn)
+    attached_groups = [g['GroupName'] for g in entities['PolicyGroups']]
+    attached_users = [u['UserName'] for u in entities['PolicyUsers']]
+    attached_roles = [r['RoleName'] for r in entities['PolicyRoles']]
 
-    entity_list.append(iam.list_entities_for_policy(PolicyArn=policy_arn)['PolicyGroups'])
-    entity_list.append(iam.list_entities_for_policy(PolicyArn=policy_arn)['PolicyUsers'])
-    entity_list.append(iam.list_entities_for_policy(PolicyArn=policy_arn)['PolicyRoles'])
+    entity_list = {
+        "Groups": attached_groups,
+        "Users": attached_users,
+        "Roles": attached_roles
+    }
 
-    iam_data.append((policy_arn, policy_name, policy_id, policy_type, entity_list, scan_time))
+    # Append tuple of policy info
+    iam_data.append((
+        policy_arn,
+        policy_name,
+        policy_id,
+        policy_type,
+        json.dumps(entity_list),
+        create_date,
+        update_date,
+        scan_time
+    ))
 
-
-print(iam_data)
-
-
-
-
-
-#print(policy_list)
+# Print collected data
+for record in iam_data:
+    print(record)
