@@ -11,4 +11,4 @@ load_dotenv(".env.prod")
 iam = boto3.client('iam')
 response = iam.list_policies()
 
-print(response)
+print(response['Policies'])
