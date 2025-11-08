@@ -3,12 +3,13 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 import json
+import psycopg2
 
-def collect_s3_data():
-    """Collect AWS S3 bucket details and store them in PostgreSQL."""
+def collect_iam_data():
+    """Collect AWS IAM Policy details and store them in PostgreSQL."""
     load_dotenv(".env.prod")
 
-    ##Postgres DB connections details
+    # Postgres DB connection details
     db_host = os.getenv("DB_HOST")
     db_name = os.getenv("DB_NAME")
     db_user = os.getenv("DB_USER")
@@ -17,11 +18,9 @@ def collect_s3_data():
     iam = boto3.client('iam')
 
     response = iam.list_policies(Scope='All')
-
-    policy_list = []
-    iam_data = []
-
     policy_list_allinfo = response['Policies']
+
+    iam_data = []
 
     for policy in policy_list_allinfo:
         policy_arn = policy['Arn']
@@ -31,11 +30,8 @@ def collect_s3_data():
         update_date = policy.get('UpdateDate')
         scan_time = datetime.now()
 
-        # Determine policy type
-        if policy_arn.startswith("arn:aws:iam::aws:policy/"):
-            is_aws_managed = True
-        else:
-            is_aws_managed = False
+        # Determine AWS-managed vs customer-managed - True or False
+        is_aws_managed = policy_arn.startswith("arn:aws:iam::aws:policy/")
 
         # Collect attached entities (groups, users, roles)
         entities = iam.list_entities_for_policy(PolicyArn=policy_arn)
@@ -49,15 +45,15 @@ def collect_s3_data():
             "Roles": attached_roles
         }
 
-        # Append tuple of policy info
+        # Append tuple for DB insert
         iam_data.append((
             policy_arn,
             policy_name,
             policy_id,
-            policy_type,
             json.dumps(entity_list),
             create_date,
             update_date,
+            is_aws_managed,
             scan_time
         ))
 
@@ -75,23 +71,33 @@ def collect_s3_data():
         cursor = conn.cursor()
         print("✅ Database connected successfully")
 
+        # insert query to push data to table
         insert_query = """
-        INSERT INTO iam_policies (policy_arn, policy_name, policy_id, policy_type, attached_entities, create_date, update_date, is_aws_managed, scan_time)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (bucket_name)
+        INSERT INTO iam_policies (
+            policy_arn,
+            policy_name,
+            policy_id,
+            attached_entities,
+            create_date,
+            update_date,
+            is_aws_managed,
+            scan_time
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (policy_arn)
         DO UPDATE SET
-            region = EXCLUDED.region,
-            public_access = EXCLUDED.public_access,
-            encryption_enabled = EXCLUDED.encryption_enabled,
-            creation_date = EXCLUDED.creation_date,
+            attached_entities = EXCLUDED.attached_entities,
+            create_date = EXCLUDED.create_date,
+            update_date = EXCLUDED.update_date,
+            is_aws_managed = EXCLUDED.is_aws_managed,
             scan_time = EXCLUDED.scan_time;
         """
 
-        for bucket_info in s3_bucket_data:
-            cursor.execute(insert_query, tuple(bucket_info))
+        for policy_info in iam_data:
+            cursor.execute(insert_query, tuple(policy_info))
 
         conn.commit()
-        print("✅ S3 bucket data inserted/updated successfully")
+        print("✅ IAM policy data inserted/updated successfully")
 
     except Exception as e:
         print("❌ Database operation failed:", e)
@@ -102,6 +108,6 @@ def collect_s3_data():
         if 'conn' in locals():
             conn.close()
 
-# Allow running directly or from collector.py
+# Allow direct run
 if __name__ == "__main__":
-    collect_s3_data()
+    collect_iam_data()
