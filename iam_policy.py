@@ -33,9 +33,9 @@ def collect_s3_data():
 
         # Determine policy type
         if policy_arn.startswith("arn:aws:iam::aws:policy/"):
-            policy_type = "aws_managed"
+            is_aws_managed = True
         else:
-            policy_type = "customer_managed"
+            is_aws_managed = False
 
         # Collect attached entities (groups, users, roles)
         entities = iam.list_entities_for_policy(PolicyArn=policy_arn)
@@ -65,6 +65,43 @@ def collect_s3_data():
     for record in iam_data:
         print(record)
 
+    try:
+        conn = psycopg2.connect(
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_pass
+        )
+        cursor = conn.cursor()
+        print("✅ Database connected successfully")
+
+        insert_query = """
+        INSERT INTO iam_policies (policy_arn, policy_name, policy_id, policy_type, attached_entities, create_date, update_date, is_aws_managed, scan_time)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (bucket_name)
+        DO UPDATE SET
+            region = EXCLUDED.region,
+            public_access = EXCLUDED.public_access,
+            encryption_enabled = EXCLUDED.encryption_enabled,
+            creation_date = EXCLUDED.creation_date,
+            scan_time = EXCLUDED.scan_time;
+        """
+
+        for bucket_info in s3_bucket_data:
+            cursor.execute(insert_query, tuple(bucket_info))
+
+        conn.commit()
+        print("✅ S3 bucket data inserted/updated successfully")
+
+    except Exception as e:
+        print("❌ Database operation failed:", e)
+
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
+
 # Allow running directly or from collector.py
 if __name__ == "__main__":
-    collect_s3_data()        
+    collect_s3_data()
