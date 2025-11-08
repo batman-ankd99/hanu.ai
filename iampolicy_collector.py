@@ -28,7 +28,7 @@ def collect_iampolicy_data():
         policy_id = policy['PolicyId']
         create_date = policy.get('CreateDate')
         update_date = policy.get('UpdateDate')
-        scan_time = datetime.now()
+        scan_time = datetime.utcnow()
 
         # Determine AWS-managed vs customer-managed - True or False
         is_aws_managed = policy_arn.startswith("arn:aws:iam::aws:policy/")

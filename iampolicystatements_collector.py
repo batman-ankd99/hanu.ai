@@ -39,3 +39,69 @@ for policy_arn in policy_list_local:
     policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn,VersionId = policy_detail['Policy']['DefaultVersionId'])
 
     print(json.dumps(policy_version['PolicyVersion']['Document']['Statement'], indent=4))
+
+    statements = policy_version['PolicyVersion']['Document']['Statement']
+    if not isinstance(statements, list):
+        statements = [statements]  # handle single statement policies
+
+    for st in statements:
+        sid = st.get('Sid')
+        effect = st.get('Effect')
+        principal = st.get('Principal')
+        actions = st.get('Action')
+        resources = st.get('Resource')
+        conditions = st.get('Condition')
+
+        # Check for principal = "*"
+        if principal is None:
+            is_principal_star = False
+        elif principal == "*" or (isinstance(principal, dict) and "*" in str(principal)):
+            is_principal_star = True
+        else:
+            is_principal_star = False
+
+#sometimes we get list and sometimes string, when we get string we are making it seingle element array so we can inject in DB
+        if isinstance(actions, str):
+            actions = [actions]
+        if isinstance(resources, str):
+            resources = [resources]
+
+        raw_statement = json.dumps(st)
+        scan_time = datetime.utcnow()
+
+        try:
+            conn = psycopg2.connect(
+                host=db_host,
+                database=db_name,
+                user=db_user,
+                password=db_pass
+            )
+            cur = conn.cursor()
+
+            insert_query = """
+                INSERT INTO iam_policy_statements
+                (policy_arn, statement_id, effect, principal, is_principal_star,
+                 actions, resources, conditions, raw_statement, scan_time)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
+
+            cur.execute(insert_query, (
+                policy_arn,
+                sid,
+                effect,
+                json.dumps(principal) if principal else None,
+                is_principal_star,
+                actions,
+                resources,
+                json.dumps(conditions) if conditions else None,
+                raw_statement,
+                scan_time
+            ))
+
+            conn.commit()
+            cur.close()
+            conn.close()
+            print(f"✅ Inserted statement for policy: {policy_arn}")
+
+        except Exception as e:
+            print(f"❌ Error inserting policy {policy_arn}: {e}")
