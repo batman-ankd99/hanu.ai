@@ -66,6 +66,8 @@ for policy_arn in policy_list_local:
         if isinstance(resources, str):
             resources = [resources]
 
+        is_action_star = any(a == "*" or a.endswith(":*") for a in actions)    
+
         raw_statement = json.dumps(st)
         scan_time = datetime.utcnow()
 
@@ -80,9 +82,9 @@ for policy_arn in policy_list_local:
 
             insert_query = """
                 INSERT INTO iam_policy_statements
-                (policy_arn, statement_id, effect, principal, is_principal_star,
+                (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
                  actions, resources, conditions, raw_statement, scan_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
 
             cur.execute(insert_query, (
@@ -91,6 +93,7 @@ for policy_arn in policy_list_local:
                 effect,
                 json.dumps(principal) if principal else None,
                 is_principal_star,
+                is_action_star,
                 actions,
                 resources,
                 json.dumps(conditions) if conditions else None,
