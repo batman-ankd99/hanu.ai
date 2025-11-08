@@ -19,6 +19,12 @@ response_iampolicy = iampolicy.list_policies(Scope='Local') #will fetch only cus
 
 # SQl Table fields -> id, policy_arn, sid, effect, is_principal_star, actions, resources, conditions, raw_Statement, scan time
 
-policy_st_allinfo = response_iampolicy['Policies']
+policy_st_allinfo = response_iampolicy['Policies'] #this is policy arn of all policies managed by customer
+#print(policy_st_allinfo)
 
-print(policy_st_allinfo)
+policy_list_local = [] #arns of all policies to be appended
+
+for policy in policy_st_allinfo:
+    policy_list_local.append(policy['Arn'])
+
+print(policy_list_local)
