@@ -27,4 +27,11 @@ policy_list_local = [] #arns of all policies to be appended
 for policy in policy_st_allinfo:
     policy_list_local.append(policy['Arn'])
 
-print(policy_list_local)
+#print(policy_list_local)
+
+#now need some logic to fetch details of policy complete since we have policy arn
+
+for policy_arn in policy_list_local:
+    policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
+
+    print(policy_detail)
