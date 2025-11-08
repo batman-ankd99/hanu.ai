@@ -5,7 +5,7 @@ import os
 import json
 import psycopg2
 
-def collect_iam_data():
+def collect_iampolicy_data():
     """Collect AWS IAM Policy details and store them in PostgreSQL."""
     load_dotenv(".env.prod")
 
