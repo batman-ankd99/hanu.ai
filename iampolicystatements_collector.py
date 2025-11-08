@@ -35,3 +35,7 @@ for policy_arn in policy_list_local:
     policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
 
     print(policy_detail)
+
+    policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn,VersionId = policy_detail['Policy']['DefaultVersionId'])
+
+    print(json.dumps(policy_version['PolicyVersion']['Document']['Statement']))
