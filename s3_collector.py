@@ -3,16 +3,17 @@ import psycopg2  # to connect to postgres
 from datetime import datetime
 from dotenv import load_dotenv  # to load .env files key value in environment of app
 import os
+from db_utils import get_db_connection
 
 def collect_s3_data():
     """Collect AWS S3 bucket details and store them in PostgreSQL."""
-    load_dotenv(".env.prod")
+#    load_dotenv(".env.prod")
 
     ##Postgres DB connections details
-    db_host = os.getenv("DB_HOST")
-    db_name = os.getenv("DB_NAME")
-    db_user = os.getenv("DB_USER")
-    db_pass = os.getenv("DB_PASS")
+#    db_host = os.getenv("DB_HOST")
+#    db_name = os.getenv("DB_NAME")
+#    db_user = os.getenv("DB_USER")
+#    db_pass = os.getenv("DB_PASS")
 
     s3_client = boto3.client('s3')
     s3_response = s3_client.list_buckets()
@@ -66,14 +67,16 @@ def collect_s3_data():
     print(s3_bucket_data)
 
     # --- Push to PostgreSQL ---
-    try:
-        conn = psycopg2.connect(
-            host=db_host,
-            database=db_name,
-            user=db_user,
-            password=db_pass
-        )
+#    try:
+#        conn = psycopg2.connect(
+#            host=db_host,
+#            database=db_name,
+#            user=db_user,
+#            password=db_pass
+#        )
+        conn = get_connection()
         cursor = conn.cursor()
+
         print("✅ Database connected successfully")
 
         insert_query = """

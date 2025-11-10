@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import json
 import psycopg2
+from db_utils import get_db_connection
 
 """Collect AWS IAM Policy Statements details and store them in PostgreSQL."""
 load_dotenv(".env.prod")
@@ -66,7 +67,7 @@ for policy_arn in policy_list_local:
         if isinstance(resources, str):
             resources = [resources]
 
-        is_action_star = any(a == "*" or a.endswith(":*") for a in actions)    
+        is_action_star = any(a == "*" or a.endswith(":*") for a in actions)
 
         raw_statement = json.dumps(st)
         scan_time = datetime.utcnow()

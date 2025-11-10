@@ -3,6 +3,7 @@ import psycopg2 #to connect to postgres
 from datetime import datetime
 from dotenv import load_dotenv #to load .env files key value in enviroment of app
 import os
+from db_utils import get_db_connection
 
 def collect_sg_data():
     """Collect AWS Security Group details and store them in PostgreSQL."""
