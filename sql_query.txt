@@ -15,11 +15,10 @@ SELECT
     s.effect,
     s.principal,
     s.actions,
-    s.conditions,
-    s.statement_id,
     p.policy_name,
     p.attached_entities
 FROM iam_policy_statements AS s
 JOIN iam_policies AS p
     ON s.policy_arn = p.policy_arn
-WHERE s.is_action_star = 't' OR s.is_principal_star = 't';
+WHERE (s.is_action_star = 't' OR s.is_principal_star = 't')
+  AND s.effect = 'Allow';
