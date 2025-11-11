@@ -22,3 +22,22 @@ insert_query = """
  WHERE (s.is_action_star = 't' OR s.is_principal_star = 't')
    AND s.effect = 'Allow';
 """
+
+# Execute the query
+cursor.execute(select_query)
+
+# Fetch all rows
+rows = cursor.fetchall()
+
+# Print the output in a readable format
+print("\nQuery Results:")
+for row in rows:
+    print(row)
+
+# Optional: get column names
+colnames = [desc[0] for desc in cursor.description]
+print("\nColumns:", colnames)
+
+# Cleanup
+cursor.close()
+conn.close()    
