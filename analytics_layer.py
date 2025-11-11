@@ -31,7 +31,7 @@ cursor.execute(select_query)
 rows = cursor.fetchall()
 colnames = [desc[0] for desc in cursor.description]
 
-print("\nQuery Results:")
+print("\nPolicies that are at risk, opening star in either principal or Action:")
 print(tabulate(rows, headers=colnames, tablefmt="psql"))
 
 
