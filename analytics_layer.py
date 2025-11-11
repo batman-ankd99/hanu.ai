@@ -4,6 +4,7 @@ from datetime import datetime
 from dotenv import load_dotenv #to load .env files key value in enviroment of app
 import os
 from db_utils import get_db_connection
+from tabulate import tabulate
 
 conn = get_db_connection()
 cursor = conn.cursor()
@@ -28,15 +29,11 @@ cursor.execute(select_query)
 
 # Fetch all rows
 rows = cursor.fetchall()
-
-# Print the output in a readable format
-print("\nQuery Results:")
-for row in rows:
-    print(row)
-
-# Optional: get column names
 colnames = [desc[0] for desc in cursor.description]
-print("\nColumns:", colnames)
+
+print("\nQuery Results:")
+print(tabulate(rows, headers=colnames, tablefmt="psql"))
+
 
 # Cleanup
 cursor.close()
