@@ -28,8 +28,9 @@ select_query = """
 cursor.execute(select_query)
 
 # Fetch all rows
-rows = cursor.fetchall()
-colnames = [desc[0] for desc in cursor.description]
+rows = cursor.fetchall() #all rows fetched from select query are brought into python memory, as a tuple
+colnames = [desc[0] for desc in cursor.description] #after query, cursor.description gives metadata about each returned column, so desc[0] only fetches column name
+#its a list of tuples - (('id', ...), ('effect', ...), ('principal', ...), ('actions', ...), ...)
 
 print("\nPolicies that are at risk, opening star in either principal or Action:")
 print(tabulate(rows, headers=colnames, tablefmt="psql"))
