@@ -8,7 +8,7 @@ from db_utils import get_db_connection
 conn = get_db_connection()
 cursor = conn.cursor()
 
-insert_query = """
+select_query = """
  SELECT
      s.id,
      s.effect,
@@ -40,4 +40,4 @@ print("\nColumns:", colnames)
 
 # Cleanup
 cursor.close()
-conn.close()    
+conn.close()
