@@ -87,11 +87,11 @@ def collect_s3_data():
         conn.commit()
         print("✅ S3 bucket data inserted/updated successfully")
 
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
+        finally:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
 
 # Allow running directly or from collector.py
 if __name__ == "__main__":
