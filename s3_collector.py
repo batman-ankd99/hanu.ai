@@ -64,16 +64,6 @@ def collect_s3_data():
         # Added encryption_enabled in tuple
         s3_bucket_data.append((bucket_name, region, s3_access_status, encryption_enabled, creation_date, scan_time))
 
-    print(s3_bucket_data)
-
-    # --- Push to PostgreSQL ---
-#    try:
-#        conn = psycopg2.connect(
-#            host=db_host,
-#            database=db_name,
-#            user=db_user,
-#            password=db_pass
-#        )
         conn = get_connection()
         cursor = conn.cursor()
 
