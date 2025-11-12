@@ -20,7 +20,6 @@ def collect_s3_data():
 
     s3_bucket_data = []
 
-    # print(s3_response['Buckets'])
     for s3bucket in s3_response['Buckets']:
         bucket_name = s3bucket['Name']
         creation_date = s3bucket['CreationDate']
@@ -51,7 +50,6 @@ def collect_s3_data():
             encryption_res = s3_client.get_bucket_encryption(Bucket=bucket_name)
             rules = encryption_res['ServerSideEncryptionConfiguration']['Rules']
             algo = rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm']
-            # algo could be 'AES256' or 'aws:kms'
             encryption_enabled = f"enabled ({algo})"
         except s3_client.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
@@ -60,11 +58,11 @@ def collect_s3_data():
                 encryption_enabled = "unknown"
 
         scan_time = datetime.now()
-
-        # Added encryption_enabled in tuple
         s3_bucket_data.append((bucket_name, region, s3_access_status, encryption_enabled, creation_date, scan_time))
 
-        conn = get_connection()
+    # --- Push to PostgreSQL ---
+    try:
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         print("✅ Database connected successfully")
@@ -87,11 +85,14 @@ def collect_s3_data():
         conn.commit()
         print("✅ S3 bucket data inserted/updated successfully")
 
-        finally:
-            if 'cursor' in locals():
-                cursor.close()
-            if 'conn' in locals():
-                conn.close()
+    except Exception as e:
+        print("❌ Database operation failed:", e)
+
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
 
 # Allow running directly or from collector.py
 if __name__ == "__main__":
