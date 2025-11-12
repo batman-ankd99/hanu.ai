@@ -36,11 +36,11 @@ def collect_iampolicystatements_data():
     for policy_arn in policy_list_local:
         policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
 
-        print(policy_detail)
+#        print(policy_detail)
 
         policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn,VersionId = policy_detail['Policy']['DefaultVersionId'])
 
-        print(json.dumps(policy_version['PolicyVersion']['Document']['Statement'], indent=4))
+#        print(json.dumps(policy_version['PolicyVersion']['Document']['Statement'], indent=4))
 
         statements = policy_version['PolicyVersion']['Document']['Statement']
         if not isinstance(statements, list):
@@ -111,7 +111,12 @@ def collect_iampolicystatements_data():
             except Exception as e:
                 print(f"❌ Error inserting policy {policy_arn}: {e}")
 
-            return {"status": "success"}    
+            return {
+                "status": "success" if not errors else "partial_success",
+                "total_policies": total_policies,
+                "total_statements": total_statements,
+                "errors": errors
+            } 
 
 # Allow direct run
 if __name__ == "__main__":
