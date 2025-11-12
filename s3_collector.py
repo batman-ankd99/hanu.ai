@@ -87,9 +87,6 @@ def collect_s3_data():
         conn.commit()
         print("✅ S3 bucket data inserted/updated successfully")
 
-    except Exception as e:
-        print("❌ Database operation failed:", e)
-
     finally:
         if 'cursor' in locals():
             cursor.close()
