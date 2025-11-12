@@ -22,10 +22,12 @@ def collect_all():
         results["iampolicy"] = collect_iampolicy_data()
         results["iampolicy_statements"] = collect_iampolicystatements_data()
 
-        duration = round(time.time() - start, 2)
+        duration = round(time.time() - start, 2) # 2 is to round of till 2 digits after substraction
         logging.info(f"Collection complete in {duration}s")
 
         return {"status": "success", "details": results}
+
+        print(results)
 
     except Exception as e:
         logging.error(f"Collector failed: {e}")
