@@ -95,7 +95,7 @@ def collect_s3_data():
             conn.close()
 
     print("✅ S3 collector finished")
-    return True        
+    return {"status": "success", "count": len(s3_bucket_data)}      
 
 # Allow running directly or from collector.py
 if __name__ == "__main__":
