@@ -112,9 +112,7 @@ def collect_iampolicystatements_data():
                 print(f"❌ Error inserting policy {policy_arn}: {e}")
 
             return {
-                "status": "success",
-                "total_policies": total_policies,
-                "total_statements": total_statements
+                "status": "success"
             }
 
 # Allow direct run
