@@ -20,7 +20,6 @@ def collect_s3_data():
 
     s3_bucket_data = []
 
-    # print(s3_response['Buckets'])
     for s3bucket in s3_response['Buckets']:
         bucket_name = s3bucket['Name']
         creation_date = s3bucket['CreationDate']
@@ -51,7 +50,6 @@ def collect_s3_data():
             encryption_res = s3_client.get_bucket_encryption(Bucket=bucket_name)
             rules = encryption_res['ServerSideEncryptionConfiguration']['Rules']
             algo = rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm']
-            # algo could be 'AES256' or 'aws:kms'
             encryption_enabled = f"enabled ({algo})"
         except s3_client.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
@@ -60,21 +58,11 @@ def collect_s3_data():
                 encryption_enabled = "unknown"
 
         scan_time = datetime.now()
-
-        # Added encryption_enabled in tuple
         s3_bucket_data.append((bucket_name, region, s3_access_status, encryption_enabled, creation_date, scan_time))
 
-    print(s3_bucket_data)
-
     # --- Push to PostgreSQL ---
-#    try:
-#        conn = psycopg2.connect(
-#            host=db_host,
-#            database=db_name,
-#            user=db_user,
-#            password=db_pass
-#        )
-        conn = get_connection()
+    try:
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         print("✅ Database connected successfully")
@@ -105,6 +93,9 @@ def collect_s3_data():
             cursor.close()
         if 'conn' in locals():
             conn.close()
+
+    print("✅ S3 collector finished")
+    return {"status": "success", "count": len(s3_bucket_data)}      
 
 # Allow running directly or from collector.py
 if __name__ == "__main__":

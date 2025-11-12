@@ -55,8 +55,6 @@ def collect_ec2_data():
     except Exception as e:
         print("Database connection failed",e)
 
-
-
     ##sql query
     #INSERT into ec2_instances (instance_id, instance_name, state, region, security_groups, scan_time, pvt_ip) VALUES ('asdhbs', 'nameiinstance', 'up', 'us-east-1', 'default',  '2025-11-03 11:42:28', '10.100.0.1')
     ##
@@ -81,6 +79,8 @@ def collect_ec2_data():
 
     cursor.close()
     conn.close()
+
+    return {"status": "success", "count": len(instances)}
 
 # Allow running directly or importing in collector.py file
 if __name__ == "__main__":

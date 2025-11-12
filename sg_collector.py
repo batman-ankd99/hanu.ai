@@ -10,7 +10,6 @@ def collect_sg_data():
 
     load_dotenv(".env.prod")        #loads key, value from .env.prod file in os env var
 
-
     ##Postgress DB connections details
     db_host=os.getenv("DB_HOST")
     db_name=os.getenv("DB_NAME")
@@ -93,6 +92,8 @@ def collect_sg_data():
 
     cursor.close()
     conn.close()
+
+    return {"status": "success", "count": len(sgs)}
 
 # Allow running directly or importing in collector.py file
 if __name__ == "__main__":
