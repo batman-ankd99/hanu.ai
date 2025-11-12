@@ -25,7 +25,7 @@ def collect_all():
         duration = round(time.time() - start, 2) # 2 is to round of till 2 digits after substraction
         logging.info(f"Collection complete in {duration}s")
 
-        print(results)
+        logging.info(f"Collection summary: {results}")
         return {"status": "success", "details": results}
 
     except Exception as e:
