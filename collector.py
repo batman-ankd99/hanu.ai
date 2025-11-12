@@ -30,3 +30,6 @@ def collect_all():
     except Exception as e:
         logging.error(f"Collector failed: {e}")
         return {"status": "error", "message": str(e)}
+
+if __name__ == "__main__":
+    collect_all()
