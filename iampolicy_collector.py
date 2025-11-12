@@ -111,4 +111,4 @@ def collect_iampolicy_data():
 
 # Allow direct run
 if __name__ == "__main__":
-    collect_iam_data()
+    collect_iampolicy_data()
