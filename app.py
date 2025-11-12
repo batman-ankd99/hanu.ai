@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import collector
 import ec2_collector
+import sg_collector
 import s3_collector
 import iampolicy_collector
 import iampolicystatements_collector
@@ -27,7 +28,7 @@ def run_collector_ec2():
 def run_collector_sg():
     """Run the SG data collector and return results"""
     results_sg = sg_collector.collect_sg_data()
-    return jsonify(results_sg)    
+    return jsonify(results_sg)
 
 @app.route('/collect/s3', methods=['GET'])
 def run_collector_s3():
