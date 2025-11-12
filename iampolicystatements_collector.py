@@ -111,6 +111,8 @@ def collect_iampolicystatements_data():
             except Exception as e:
                 print(f"❌ Error inserting policy {policy_arn}: {e}")
 
+            return {"status": "success", "count": len(policies)}    
+
 # Allow direct run
 if __name__ == "__main__":
-    collect_iampolicystatements_data()                
+    collect_iampolicystatements_data()

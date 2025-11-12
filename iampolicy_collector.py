@@ -109,6 +109,8 @@ def collect_iampolicy_data():
         if 'conn' in locals():
             conn.close()
 
+    return {"status": "success", "count": len(iam_data)}        
+
 # Allow direct run
 if __name__ == "__main__":
     collect_iampolicy_data()
