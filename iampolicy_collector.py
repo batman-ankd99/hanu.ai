@@ -59,8 +59,8 @@ def collect_iampolicy_data():
         ))
 
     # Print collected data
-    for record in iam_data:
-        print(record)
+#    for record in iam_data:
+#        print(record)
 
     try:
         conn = psycopg2.connect(
@@ -109,7 +109,7 @@ def collect_iampolicy_data():
         if 'conn' in locals():
             conn.close()
 
-    return {"status": "success", "count": len(iam_data)}        
+    return {"status": "success", "count": len(iam_data)}
 
 # Allow direct run
 if __name__ == "__main__":
