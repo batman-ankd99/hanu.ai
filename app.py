@@ -1,4 +1,51 @@
 from flask import Flask, request, jsonify
 import collector
+import ec2_collector
+import s3_collector
+import iampolicy_collector
+import iampolicystatements_collector
 
-app = Flask(__name__)  # create Flask app
+app = Flask(__name__)  # create Flask app, initializes flask app
+
+@app.route('/')     #simple home page api
+def home():
+    return "AWS Collector API is running"
+
+@app.route('/collect', methods=['GET']) #when client sends get request to /collect, Flask will call run_collector()
+def run_collector():
+    """Run the full data collector and return results"""
+    results = collector.collect_all()  # call your collector_all function from collector.py file
+    return jsonify(results)  # return JSON response
+
+@app.route('/collect/ec2', methods=['GET'])
+def run_collector_ec2():
+    """Run the Ec2 data collector and return results"""
+    results_ec2 = ec2_collector.collect_ec2_data()
+    return jsonify(results_ec2)
+
+@app.route('/collect/sg', methods=['GET'])
+def run_collector_sg():
+    """Run the SG data collector and return results"""
+    results_sg = sg_collector.collect_sg_data()
+    return jsonify(results_sg)    
+
+@app.route('/collect/s3', methods=['GET'])
+def run_collector_s3():
+    """Run the Ec2 data collector and return results"""
+    results_s3 = s3_collector.collect_s3_data()
+    return jsonify(results_s3)
+
+@app.route('/collect/iampolicy', methods=['GET'])
+def run_collector_iampolicy():
+    """Run the iam policy data collector and return results"""
+    results_iampolicy = iampolicy_collector.collect_iampolicy_data()
+    return jsonify(results_iampolicy)
+
+@app.route('/collect/iampolicystatements', methods=['GET'])
+def run_collector_iampolicystatements():
+    """Run the iampolicystatements data collector and return results"""
+    results_iampolicystatements = iampolicystatements_collector.collect_iampolicystatements_data()
+    return jsonify(results_iampolicystatements)
+
+if __name__ == "__main__":
+    app.run(debug=True)
