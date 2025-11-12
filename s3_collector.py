@@ -94,6 +94,9 @@ def collect_s3_data():
         if 'conn' in locals():
             conn.close()
 
+    print("✅ S3 collector finished")
+    return True        
+
 # Allow running directly or from collector.py
 if __name__ == "__main__":
     collect_s3_data()
