@@ -89,7 +89,7 @@ def collect_iampolicystatements_data():
                 INSERT INTO iam_policy_statements
                 (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
                  actions, resources, conditions, raw_statement, scan_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
                 ON CONFLICT (policy_arn)
                 DO UPDATE SET
