@@ -90,6 +90,19 @@ def collect_iampolicystatements_data():
                 (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
                  actions, resources, conditions, raw_statement, scan_time)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+
+                ON CONFLICT (policy_arn)
+                DO UPDATE SET
+                   statement_id = EXCLUDED.statement_id,
+                   effect = EXCLUDED.effect,
+                   principal = EXCLUDED.principal,
+                   is_principal_star = EXCLUDED.is_principal_star,
+                   is_action_star = EXCLUDED.is_action_star,
+                   actions = EXCLUDED.actions;
+                   resources = EXCLUDED.resources,
+                   conditions = EXCLUDED.conditions,
+                   raw_statement = EXCLUDED.raw_statement,
+                   scan_time = EXCLUDED.scan_time;
             """
 
             cur.execute(insert_query, (
