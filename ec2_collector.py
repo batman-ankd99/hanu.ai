@@ -24,9 +24,17 @@ def collect_ec2_data():
     response = ec2_client.describe_instances()
 
     instances = []
+    instance_live_list = []
     for reservation in response['Reservations']:
         for ec2 in reservation['Instances']:
             instance_id = ec2['InstanceId']
+            ####instance name to be fetched from tags
+            instance_name = None
+            if 'Tags' in ec2:
+                for tag in ec2['Tags']:
+                    if tag['Key'] == 'Name':
+                        instance_name = tag['Value']
+            ####            
             ip_address =  ec2['PrivateIpAddress']
             region =   ec2_client.meta.region_name
             state = ec2['State']['Name']
@@ -35,11 +43,10 @@ def collect_ec2_data():
                 security_groups.append(sg['GroupName'])
             scan_time = datetime.now()
 
-            instances.append((instance_id, ip_address, region, state, security_groups, scan_time, ip_address))
+            instances.append((instance_id, instance_name, state, region, security_groups, scan_time, ip_address))
     #print(instances)   ##double brackets means - for every instance all fields are added as a list in list instances
-
+            instance_live_list.append(instance_id)
     ##Connect to DB now using above details
-
     try:
 
         conn = psycopg2.connect(
@@ -74,6 +81,13 @@ def collect_ec2_data():
 
     for instance_info in instances:
         cursor.execute(insert_query, tuple(instance_info))
+
+    ec2_current = tuple(instance_live_list)
+    delete_query = """
+    DELETE FROM ec2_instances
+    WHERE instance_id NOT IN %s;
+    """
+    cursor.execute(delete_query, (ec2_current,))
 
     conn.commit()
 
