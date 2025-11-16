@@ -90,8 +90,7 @@ def collect_iampolicystatements_data():
                 (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
                  actions, resources, conditions, raw_statement, scan_time)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-
-                ON CONFLICT (policy_arn)
+                ON CONFLICT (policy_arn, statement_id)
                 DO UPDATE SET
                    statement_id = EXCLUDED.statement_id,
                    effect = EXCLUDED.effect,
