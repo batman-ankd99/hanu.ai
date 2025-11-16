@@ -99,7 +99,6 @@ def collect_s3_data():
             cursor.execute(delete_query, (s3_current,))
 
         print("✅ Deleted old s3 entries successfully")
-
         conn.commit()
 
 
