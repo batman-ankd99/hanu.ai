@@ -19,6 +19,7 @@ def collect_s3_data():
     s3_response = s3_client.list_buckets()
 
     s3_bucket_data = []
+    bucket_live_list = []
 
     for s3bucket in s3_response['Buckets']:
         bucket_name = s3bucket['Name']
@@ -59,6 +60,7 @@ def collect_s3_data():
 
         scan_time = datetime.now()
         s3_bucket_data.append((bucket_name, region, s3_access_status, encryption_enabled, creation_date, scan_time))
+        bucket_live_list.append(bucket_name)
 
     # --- Push to PostgreSQL ---
     try:
@@ -82,8 +84,24 @@ def collect_s3_data():
         for bucket_info in s3_bucket_data:
             cursor.execute(insert_query, tuple(bucket_info))
 
-        conn.commit()
         print("✅ S3 bucket data inserted/updated successfully")
+
+        s3_current = tuple(bucket_live_list)
+        delete_query = """
+        DELETE FROM s3_buckets
+        WHERE bucket_name NOT IN %s;
+        """
+
+        if len(bucket_live_list) == 0:
+       # No buckets in AWS → delete everything
+            cursor.execute("DELETE FROM s3_buckets;")
+        else:
+            cursor.execute(delete_query, (s3_current,))
+
+        print("✅ Deleted old s3 entries successfully")
+
+        conn.commit()
+
 
     except Exception as e:
         print("❌ Database operation failed:", e)
@@ -95,7 +113,7 @@ def collect_s3_data():
             conn.close()
 
     print("✅ S3 collector finished")
-    return {"status": "success", "count": len(s3_bucket_data)}      
+    return {"status": "success", "count": len(s3_bucket_data)}
 
 # Allow running directly or from collector.py
 if __name__ == "__main__":
