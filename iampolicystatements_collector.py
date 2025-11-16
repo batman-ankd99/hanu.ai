@@ -22,7 +22,6 @@ def collect_iampolicystatements_data():
     # SQl Table fields -> id, policy_arn, sid, effect, is_principal_star, actions, resources, conditions, raw_Statement, scan time
 
     policy_st_allinfo = response_iampolicy['Policies'] #this is policy arn of all policies managed by customer
-    #print(policy_st_allinfo)
 
     policy_list_local = [] #arns of all policies to be appended
 
@@ -114,7 +113,7 @@ def collect_iampolicystatements_data():
 
     return {
         "status": "success",
-        "": ""
+        "total_cust_managed_policies": "len(policy_list_loca)"
     }
 
 # Allow direct run
