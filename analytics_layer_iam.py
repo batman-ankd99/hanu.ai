@@ -23,7 +23,7 @@ def analytics_iam():
          FROM iam_policy_statements AS s
          JOIN iam_policies AS p
              ON s.policy_arn = p.policy_arn
-         WHERE (s.is_action_star = 't' OR s.is_principal_star = 't')
+         WHERE (s.is_action_star = TRUE OR s.is_principal_star = TRUE)
            AND s.effect = 'Allow';
         """
 
@@ -48,7 +48,7 @@ def analytics_iam():
         if 'conn' in locals():
             conn.close()
 
-    return {"status": "success", "count": len(rows)}
+    return {"status": "success", "count": len(rows), "table": tabulate(rows, headers=colnames, tablefmt="psql")}
 
 # Allow direct run
 if __name__ == "__main__":
