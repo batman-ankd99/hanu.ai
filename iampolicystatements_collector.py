@@ -125,7 +125,7 @@ def collect_iampolicystatements_data():
     delete_query = """
     DELETE FROM iam_policy_statements
     WHERE policy_arn NOT IN %s
-      AND policy_arn LIKE 'arn:aws:iam::%:policy/%';
+      AND policy_arn NOT LIKE 'arn:aws:iam::aws:policy/%%';
     """
     cur.execute(delete_query, (tuple(policy_list_local),))
     cur.close()
