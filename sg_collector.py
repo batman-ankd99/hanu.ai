@@ -22,6 +22,7 @@ def collect_sg_data():
     #print(sg_response)
 
     sgs = []
+    sg_live_list = []
 
     for sg in sg_response['SecurityGroups']:
             group_id=sg['GroupId']
@@ -44,6 +45,7 @@ def collect_sg_data():
 
             scan_time = datetime.now()
             sgs.append((group_id, group_name, description, outbound, inbound, scan_time))
+            sg_live_list.append(group_id)
     #        print("grp id : ", group_id)
     #        print("group name: ", group_name)
     #        print("description: ", description)
@@ -77,7 +79,6 @@ def collect_sg_data():
 
      ON CONFLICT (group_id)
      DO UPDATE SET
-        group_id = EXCLUDED.group_id,
         group_name = EXCLUDED.group_name,
         description = EXCLUDED.description,
         inbound_rules = EXCLUDED.inbound_rules,
@@ -87,6 +88,16 @@ def collect_sg_data():
 
     for sg_info in sgs:
         cursor.execute(insert_query_sg, tuple(sg_info))
+
+    sg_current = tuple(sg_live_list)
+    if len(sg_current) == 1:
+        sg_current = (sg_current[0],)
+
+    delete_query = """
+    DELETE FROM security_groups
+    WHERE group_id NOT IN %s;
+    """
+    cursor.execute(delete_query, (sg_current,))
 
     conn.commit()
 
