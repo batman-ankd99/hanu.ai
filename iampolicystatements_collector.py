@@ -33,10 +33,21 @@ def collect_iampolicystatements_data():
 
     #now need some logic to fetch details of policy complete since we have policy arn
 
+    try:
+        conn = psycopg2.connect(
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_pass
+        )
+        cur = conn.cursor()
+
+    except Exception as e:
+        print("❌ Database connection failed:", e)
+        return {"status": "db_failed"}
+
     for policy_arn in policy_list_local:
         policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
-
-#        print(policy_detail)
 
         policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn,VersionId = policy_detail['Policy']['DefaultVersionId'])
 
@@ -45,6 +56,8 @@ def collect_iampolicystatements_data():
         statements = policy_version['PolicyVersion']['Document']['Statement']
         if not isinstance(statements, list):
             statements = [statements]  # handle single statement policies
+
+
 
         for st in statements:
             sid = st.get('Sid')
@@ -73,47 +86,36 @@ def collect_iampolicystatements_data():
             raw_statement = json.dumps(st)
             scan_time = datetime.utcnow()
 
-            try:
-                conn = psycopg2.connect(
-                    host=db_host,
-                    database=db_name,
-                    user=db_user,
-                    password=db_pass
-                )
-                cur = conn.cursor()
+            insert_query = """
+                INSERT INTO iam_policy_statements
+                (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
+                 actions, resources, conditions, raw_statement, scan_time)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """
 
-                insert_query = """
-                    INSERT INTO iam_policy_statements
-                    (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
-                     actions, resources, conditions, raw_statement, scan_time)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                """
+            cur.execute(insert_query, (
+                policy_arn,
+                sid,
+                effect,
+                json.dumps(principal) if principal else None,
+                is_principal_star,
+                is_action_star,
+                actions,
+                resources,
+                json.dumps(conditions) if conditions else None,
+                raw_statement,
+                scan_time
+            ))
 
-                cur.execute(insert_query, (
-                    policy_arn,
-                    sid,
-                    effect,
-                    json.dumps(principal) if principal else None,
-                    is_principal_star,
-                    is_action_star,
-                    actions,
-                    resources,
-                    json.dumps(conditions) if conditions else None,
-                    raw_statement,
-                    scan_time
-                ))
+            conn.commit()
+            print(f"✅ Inserted statement for policy: {policy_arn}")
+    cur.close()
+    conn.close()
 
-                conn.commit()
-                cur.close()
-                conn.close()
-                print(f"✅ Inserted statement for policy: {policy_arn}")
-
-            except Exception as e:
-                print(f"❌ Error inserting policy {policy_arn}: {e}")
-
-            return {
-                "status": "success"
-            }
+    return {
+        "status": "success",
+        "": ""
+    }
 
 # Allow direct run
 if __name__ == "__main__":
