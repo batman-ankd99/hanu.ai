@@ -120,6 +120,14 @@ def collect_iampolicystatements_data():
 
             conn.commit()
             print(f"✅ Inserted statement for policy: {policy_arn}")
+
+    policy_list_local = [p["Arn"] for p in policy_st_allinfo]
+    delete_query = """
+    DELETE FROM iam_policy_statements
+    WHERE policy_arn NOT IN %s
+      AND policy_arn LIKE 'arn:aws:iam::%:policy/%';
+    """
+    cur.execute(delete_query, (tuple(policy_list_local),))
     cur.close()
     conn.close()
 
