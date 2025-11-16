@@ -113,7 +113,7 @@ def collect_iampolicystatements_data():
 
     return {
         "status": "success",
-        "total_cust_managed_policies": "len(policy_list_loca)"
+        "total_cust_managed_policies": len(policy_list_local)
     }
 
 # Allow direct run
