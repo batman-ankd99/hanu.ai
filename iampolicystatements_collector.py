@@ -98,7 +98,7 @@ def collect_iampolicystatements_data():
                    principal = EXCLUDED.principal,
                    is_principal_star = EXCLUDED.is_principal_star,
                    is_action_star = EXCLUDED.is_action_star,
-                   actions = EXCLUDED.actions;
+                   actions = EXCLUDED.actions,
                    resources = EXCLUDED.resources,
                    conditions = EXCLUDED.conditions,
                    raw_statement = EXCLUDED.raw_statement,
