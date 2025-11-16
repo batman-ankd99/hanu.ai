@@ -6,6 +6,7 @@ import s3_collector
 import iampolicy_collector
 import iampolicystatements_collector
 import analytics_layer_iam
+import analytics_layer_sg
 
 app = Flask(__name__)  # create Flask app, initializes flask app
 
@@ -54,6 +55,12 @@ def run_analyzer_iam():
     """Run the analytics function to show faulty iam policies"""
     results_analytics_iam = analytics_layer_iam.analytics_iam()
     return jsonify(results_analytics_iam)
+
+@app.route('/analyzer/sg', methods=['GET'])
+def run_analyzer_sg():
+    """Run the analytics function to show faulty SG rules"""
+    results_analytics_sg = analytics_layer_sg.analytics_sg()
+    return jsonify(results_analytics_sg)
 
 if __name__ == "__main__":
     app.run(debug=True)
