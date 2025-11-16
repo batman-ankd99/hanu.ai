@@ -6,7 +6,7 @@ import os
 from db_utils import get_db_connection
 from tabulate import tabulate
 
-def analytics_iam():
+def analytics_sg():
 
     try:
         conn = get_db_connection()
@@ -14,17 +14,13 @@ def analytics_iam():
 
         select_query = """
          SELECT
-             s.id,
-             s.effect,
-             s.principal,
-             s.actions,
-             p.policy_name,
-             p.attached_entities
-         FROM iam_policy_statements AS s
-         JOIN iam_policies AS p
-             ON s.policy_arn = p.policy_arn
-         WHERE (s.is_action_star = TRUE OR s.is_principal_star = TRUE)
-           AND s.effect = 'Allow';
+             group_id,
+             group_name,
+             inbound_rules,
+             outbound_rules
+         FROM security_groups
+         WHERE inbound_rules LIKE '%0.0.0.0/0%' OR
+               outbound_rules LIKE '%0.0.0.0/0%';
         """
 
         # Execute the query
@@ -35,7 +31,7 @@ def analytics_iam():
         colnames = [desc[0] for desc in cursor.description] #after query, cursor.description gives metadata about each returned column, so desc[0] only fetches column name
         #its a list of tuples - (('id', ...), ('effect', ...), ('principal', ...), ('actions', ...), ...)
 
-        print("\nPolicies that are at risk, opening star in either principal or Action:")
+        print("\n SG rules that contains traffic to go or come from anywhere, this puts Infra at risk. Are as below:")
         print(tabulate(rows, headers=colnames, tablefmt="psql"))
 
     except Exception as e:
@@ -52,4 +48,4 @@ def analytics_iam():
 
 # Allow direct run
 if __name__ == "__main__":
-    analytics_iam()
+    analytics_sg()
