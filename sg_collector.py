@@ -1,110 +1,124 @@
 import boto3
-import psycopg2 #to connect to postgres
+import psycopg2
 from datetime import datetime
-from dotenv import load_dotenv #to load .env files key value in enviroment of app
+from dotenv import load_dotenv
 import os
-from db_utils import get_db_connection
+import json
+
 
 def collect_sg_data():
-    """Collect AWS Security Group details and store them in PostgreSQL."""
+    """Collect AWS Security Group details along with protocol + ports + CIDRs."""
 
-    load_dotenv(".env.prod")        #loads key, value from .env.prod file in os env var
+    load_dotenv(".env.prod")
 
-    ##Postgress DB connections details
-    db_host=os.getenv("DB_HOST")
-    db_name=os.getenv("DB_NAME")
-    db_user=os.getenv("DB_USER")
-    db_pass=os.getenv("DB_PASS")
+    db_host = os.getenv("DB_HOST")
+    db_name = os.getenv("DB_NAME")
+    db_user = os.getenv("DB_USER")
+    db_pass = os.getenv("DB_PASS")
 
-    ec2_client=boto3.client('ec2')
-
+    ec2_client = boto3.client("ec2")
     sg_response = ec2_client.describe_security_groups()
-    #print(sg_response)
 
     sgs = []
     sg_live_list = []
 
     for sg in sg_response['SecurityGroups']:
-            group_id=sg['GroupId']
-            group_name=sg['GroupName']
-            description=sg['Description']
-            outbound_raw=sg['IpPermissionsEgress']
-            inbound_raw=sg['IpPermissions']
-            scan_time = datetime.now()
 
-            outbound = []
-            for entry in outbound_raw:
-                for cidr in entry.get('IpRanges', []):
-                    outbound.append(cidr['CidrIp'])
-    #        print("cidr ip ye raha list k sath :", sg_cidr_out)
+        group_id = sg['GroupId']
+        group_name = sg['GroupName']
+        description = sg.get('Description', "")
+        scan_time = datetime.now()
 
-            inbound = []
-            for in_entry in inbound_raw:
-                for cidr_in in in_entry.get('IpRanges', []):
-                    inbound.append(cidr_in['CidrIp'])
+        ################## outbound rules #################
+        outbound_rules = []
+        for entry in sg.get('IpPermissionsEgress', []):
+            protocol = entry.get("IpProtocol", "")
+            from_port = entry.get("FromPort")
+            to_port = entry.get("ToPort")
 
-            scan_time = datetime.now()
-            sgs.append((group_id, group_name, description, outbound, inbound, scan_time))
-            sg_live_list.append(group_id)
-    #        print("grp id : ", group_id)
-    #        print("group name: ", group_name)
-    #        print("description: ", description)
-    #        print("out rules :", outbound)
-    #        print("inbound rule: ", inbound)
-    #        print(" \n")
+            for cidr_block in entry.get("IpRanges", []):
+                outbound_rules.append({
+                    "cidr": cidr_block["CidrIp"],
+                    "protocol": protocol,
+                    "from_port": from_port,
+                    "to_port": to_port
+                })
 
+        ################## inbound rules #################
+        inbound_rules = []
+        for entry in sg.get('IpPermissions', []):
 
+            protocol = entry.get("IpProtocol", "")
+            from_port = entry.get("FromPort")
+            to_port = entry.get("ToPort")
+
+            for cidr_block in entry.get("IpRanges", []):
+                inbound_rules.append({
+                    "cidr": cidr_block["CidrIp"],
+                    "protocol": protocol,
+                    "from_port": from_port,
+                    "to_port": to_port
+                })
+
+        # add one row for this SG
+        sgs.append((
+            group_id,
+            group_name,
+            description,
+            json.dumps(inbound_rules),   # storing as json object as 1sg can have any no. of rules
+            json.dumps(outbound_rules),  # json
+            scan_time
+        ))
+
+        sg_live_list.append(group_id)
+
+    # db connection
     try:
-
         conn = psycopg2.connect(
-                host=db_host,
-                database=db_name,
-                user=db_user,
-                password=db_pass
-                )
-
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_pass
+        )
         cursor = conn.cursor()
         print("Database connected")
-
     except Exception as e:
-        print("Database connection failed",e)
-
-
-    ##sql query
-    #INSERT into security_groups (group_id, group_name, description, inbound_rules, outbound_rules, scan_time) VALUES ('sg-0067fc9415db35509', 'default', '', '[''0.0.0.0/0'']', '[''0.0.0.0/0'', ''106.219.165.46/32'']',  '2025-11-03 11:42:28')
-    ##
+        print("Database connection failed:", e)
+        return {"status": "error", "message": str(e)}
 
     insert_query_sg = """
-     INSERT into security_groups (group_id, group_name, description, inbound_rules, outbound_rules, scan_time) VALUES (%s, %s, %s, %s, %s, %s)
-
-     ON CONFLICT (group_id)
-     DO UPDATE SET
-        group_name = EXCLUDED.group_name,
-        description = EXCLUDED.description,
-        inbound_rules = EXCLUDED.inbound_rules,
-        outbound_rules = EXCLUDED.outbound_rules,
-        scan_time = EXCLUDED.scan_time;
+        INSERT INTO security_groups
+        (group_id, group_name, description, inbound_rules, outbound_rules, scan_time)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (group_id)
+        DO UPDATE SET
+            group_name = EXCLUDED.group_name,
+            description = EXCLUDED.description,
+            inbound_rules = EXCLUDED.inbound_rules,
+            outbound_rules = EXCLUDED.outbound_rules,
+            scan_time = EXCLUDED.scan_time;
     """
 
     for sg_info in sgs:
-        cursor.execute(insert_query_sg, tuple(sg_info))
+        cursor.execute(insert_query_sg, sg_info)
 
+    # Delete old sg entry
     sg_current = tuple(sg_live_list)
     if len(sg_current) == 1:
         sg_current = (sg_current[0],)
 
     delete_query = """
-    DELETE FROM security_groups
-    WHERE group_id NOT IN %s;
+        DELETE FROM security_groups
+        WHERE group_id NOT IN %s;
     """
     cursor.execute(delete_query, (sg_current,))
 
     conn.commit()
-
     cursor.close()
     conn.close()
 
     return {"status": "success", "count": len(sgs)}
+
 
 # Allow running directly or importing in collector.py file
 if __name__ == "__main__":
