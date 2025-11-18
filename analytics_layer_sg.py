@@ -14,13 +14,19 @@ def analytics_sg():
 
         select_query = """
          SELECT
-             group_id,
-             group_name,
-             inbound_rules,
-             outbound_rules
+            group_id,
+            group_name,
+            inbound_rules,
+            outbound_rules
          FROM security_groups
-         WHERE inbound_rules LIKE '%0.0.0.0/0%' OR
-               outbound_rules LIKE '%0.0.0.0/0%';
+         WHERE
+            inbound_rules @> '[{"cidr": "0.0.0.0/0"}]'::jsonb
+            OR
+            outbound_rules @> '[{"cidr": "0.0.0.0/0"}]'::jsonb
+            OR
+            inbound_rules @> '[{"protocol": "-1"}]'::jsonb
+            OR
+            outbound_rules @> '[{"protocol": "-1"}]'::jsonb;
         """
 
         # Execute the query
