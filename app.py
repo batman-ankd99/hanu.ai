@@ -69,10 +69,10 @@ def run_analyzer_sg():
     return jsonify(results_analytics_sg)
 
 @app.route('/analyzer/ec2', methods=['GET'])
-def run_analyzer_ec2():
-    """Run the analytics function to show Ec2"""
-    results_analytics_ec2 = analytics_layer_sg.analytics_ec2()
-    return jsonify(results_analytics_ec2)
+def run_analyzer_iam():
+    """Run the analytics function to show faulty iam policies"""
+    results_analytics_iam = analytics_layer_iam.analytics_iam()
+    return jsonify(results_analytics_iam)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
