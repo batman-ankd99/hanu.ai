@@ -1,12 +1,13 @@
 from flask import Flask, request, jsonify
-import collector
-import ec2_collector
-import sg_collector
-import s3_collector
-import iampolicy_collector
-import iampolicystatements_collector
-import analytics_layer_iam
-import analytics_layer_sg
+from collectors import collector
+from collectors import ec2_collector
+from collectors import sg_collector
+from collectors import s3_collector
+from collectors import iampolicy_collector
+from collectors import iampolicystatements_collector
+
+from analyzers import analytics_layer_iam
+from analyzers import analytics_layer_sg
 
 app = Flask(__name__)  # create Flask app, initializes flask app
 
