@@ -30,9 +30,12 @@ def analytics_iam_useraccesskey():
                  }
 
                 age_dict_warning.append(key_info)
-
-    return age_dict_warning
     print(age_dict_warning)
+    return {
+        "status": "success",
+        "count": len(age_dict_warning),
+        "records": age_dict_warning
+    }
 
 
 if __name__ == "__main__":
