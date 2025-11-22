@@ -47,8 +47,9 @@ def collect_iampolicystatements_data():
 
     for policy_arn in policy_list_local:
         policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
+        policy_name = policy_detail['Policy']['PolicyName']
 
-        policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn,VersionId = policy_detail['Policy']['DefaultVersionId'])
+        policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn, VersionId = policy_detail['Policy']['DefaultVersionId'])
 
 #        print(json.dumps(policy_version['PolicyVersion']['Document']['Statement'], indent=4))
 
@@ -60,6 +61,10 @@ def collect_iampolicystatements_data():
 
         for st in statements:
             sid = st.get('Sid')
+
+            if not sid:
+                sid = f"auto-{policy_detail['Policy']['DefaultVersionId']}-{statements.index(st)}"
+
             effect = st.get('Effect')
             principal = st.get('Principal')
             actions = st.get('Action')
@@ -87,12 +92,12 @@ def collect_iampolicystatements_data():
 
             insert_query = """
                 INSERT INTO iam_policy_statements
-                (policy_arn, statement_id, effect, principal, is_principal_star, is_action_star,
+                (policy_arn, policy_name, statement_id, effect, principal, is_principal_star, is_action_star,
                  actions, resources, conditions, raw_statement, scan_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (policy_arn, statement_id)
                 DO UPDATE SET
-                   statement_id = EXCLUDED.statement_id,
+                   policy_name = EXCLUDED.policy_name,
                    effect = EXCLUDED.effect,
                    principal = EXCLUDED.principal,
                    is_principal_star = EXCLUDED.is_principal_star,
@@ -106,6 +111,7 @@ def collect_iampolicystatements_data():
 
             cur.execute(insert_query, (
                 policy_arn,
+                policy_name,
                 sid,
                 effect,
                 json.dumps(principal) if principal else None,
