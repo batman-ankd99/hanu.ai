@@ -68,5 +68,5 @@ def run_analyzer_sg():
     results_analytics_sg = analytics_layer_sg.analytics_sg()
     return jsonify(results_analytics_sg)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
