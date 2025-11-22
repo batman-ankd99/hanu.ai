@@ -37,11 +37,25 @@ def analytics_sg():
         colnames = [desc[0] for desc in cursor.description] #after query, cursor.description gives metadata about each returned column, so desc[0] only fetches column name
         #its a list of tuples - (('id', ...), ('effect', ...), ('principal', ...), ('actions', ...), ...)
 
-        print("\n SG rules that contains traffic to go or come from anywhere, this puts Infra at risk. Are as below:")
-        print(tabulate(rows, headers=colnames, tablefmt="psql"))
+#        print("\n SG rules that contains traffic to go or come from anywhere, this puts Infra at risk. Are as below:")
+#        print(tabulate(rows, headers=colnames, tablefmt="psql"))
 
+        records = []
+        for row in rows:
+            item = {}
+            for idx, col in enumerate(colnames):
+                item[col] = row[idx]
+            records.append(item)
+        return {
+            "status": "success",
+            "count": len(records),
+            "records": records
+        }
     except Exception as e:
-        print("❌ Database operation failed:", e)
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
     # Cleanup
     finally:
@@ -49,11 +63,7 @@ def analytics_sg():
             cursor.close()
         if 'conn' in locals():
             conn.close()
-    return {
-            "status": "success",
-            "count": len(records),
-            "records": records
-        }
+
 # Allow direct run
 if __name__ == "__main__":
     analytics_sg()
