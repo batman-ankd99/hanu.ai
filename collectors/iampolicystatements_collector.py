@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import json
 import psycopg2
+from psycopg2.extras import Json
 from db_utils import get_db_connection
 
 def collect_iampolicystatements_data():
@@ -114,12 +115,12 @@ def collect_iampolicystatements_data():
                 policy_name,
                 sid,
                 effect,
-                json.dumps(principal) if principal else None,
+                Json(principal) if principal else None,
                 is_principal_star,
                 is_action_star,
-                actions,
-                resources,
-                json.dumps(conditions) if conditions else None,
+                Json(actions),
+                Json(resources),
+                Json(conditions) if conditions else None,
                 raw_statement,
                 scan_time
             ))
@@ -127,7 +128,7 @@ def collect_iampolicystatements_data():
             conn.commit()
             print(f"✅ Inserted statement for policy: {policy_arn}")
 
-    policy_list_local = [p["Arn"] for p in policy_st_allinfo]
+#    policy_list_local = [p["Arn"] for p in policy_st_allinfo]
     delete_query = """
     DELETE FROM iam_policy_statements
     WHERE policy_arn NOT IN %s
