@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+
 from collectors import collector
 from collectors import ec2_collector
 from collectors import sg_collector
@@ -10,6 +12,9 @@ from analyzers import analytics_layer_iam
 from analyzers import analytics_layer_sg
 
 app = Flask(__name__)  # create Flask app, initializes flask app
+
+# Enable CORS for all routes
+CORS(app)
 
 @app.route('/')     #simple home page api
 def home():
