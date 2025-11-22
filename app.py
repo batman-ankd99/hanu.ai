@@ -68,7 +68,7 @@ def run_analyzer_sg():
     results_analytics_sg = analytics_layer_sg.analytics_sg()
     return jsonify(results_analytics_sg)
 
-@app.route('/analyzer/ec2', methods=['GET'])
+@app.route('/analyzer/iam', methods=['GET'])
 def run_analyzer_iam():
     """Run the analytics function to show faulty iam policies"""
     results_analytics_iam = analytics_layer_iam.analytics_iam()
