@@ -48,7 +48,13 @@ def analytics_iam():
         if 'conn' in locals():
             conn.close()
 
-    return {"status": "success", "count": len(rows), "table": tabulate(rows, headers=colnames, tablefmt="psql")}
+    records = [dict(zip(colnames, row)) for row in rows]
+
+    return {
+        "status": "success",
+        "count": len(records),
+        "records": records
+    }
 
 # Allow direct run
 if __name__ == "__main__":
