@@ -49,9 +49,11 @@ def analytics_sg():
             cursor.close()
         if 'conn' in locals():
             conn.close()
-
-    return {"status": "success", "count": len(rows), "table": tabulate(rows, headers=colnames, tablefmt="psql")}
-
+    return {
+            "status": "success",
+            "count": len(records),
+            "records": records
+        }
 # Allow direct run
 if __name__ == "__main__":
     analytics_sg()
