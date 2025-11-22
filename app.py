@@ -56,12 +56,6 @@ def run_collector_iampolicystatements():
     results_iampolicystatements = iampolicystatements_collector.collect_iampolicystatements_data()
     return jsonify(results_iampolicystatements)
 
-@app.route('/analyzer', methods=['GET'])
-def run_analyzer_iam():
-    """Run the analytics function to show faulty iam policies"""
-    results_analytics_iam = analytics_layer_iam.analytics_iam()
-    return jsonify(results_analytics_iam)
-
 @app.route('/analyzer/sg', methods=['GET'])
 def run_analyzer_sg():
     """Run the analytics function to show faulty SG rules"""
