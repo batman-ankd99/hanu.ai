@@ -10,6 +10,7 @@ from collectors import iampolicystatements_collector
 
 from analyzers import analytics_layer_iam
 from analyzers import analytics_layer_sg
+from analyzers import analytics_layer_iam_useraccesskey
 
 app = Flask(__name__)  # create Flask app, initializes flask app
 
@@ -67,6 +68,12 @@ def run_analyzer_iam():
     """Run the analytics function to show faulty iam policies"""
     results_analytics_iam = analytics_layer_iam.analytics_iam()
     return jsonify(results_analytics_iam)
+
+@app.route('/analyzer/iam_useraccesskey', methods=['GET'])
+def run_analyzer_iam_useraccesskey():
+    """Run the analytics function to show IAM User access keys greater than 1 day"""
+    results_analytics_iam_useraccesskey = analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey()
+    return jsonify(results_analytics_iam_useraccesskey)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
