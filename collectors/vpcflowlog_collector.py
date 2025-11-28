@@ -15,7 +15,7 @@ def collect_vpcflowlog_data(year, month, day, bucket_name, aws_ac_num):
     response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
 
     if "Contents" not in response:
-    print(f"No logs found for {year}-{month:02d}-{day:02d}")
+        print(f"No logs found for {year}-{month:02d}-{day:02d}")
     return
 
     for obj in response['Contents']:
@@ -28,8 +28,7 @@ def collect_vpcflowlog_data(year, month, day, bucket_name, aws_ac_num):
         print("Download complete")
 
     return {
-    "status" : "success",
-    
+    "status" : "success"
     }
 
 if __name__ == "__main__":
