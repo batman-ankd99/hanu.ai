@@ -25,7 +25,14 @@ def collect_vpcflowlog_data(year, month, day, bucket_name, aws_ac_num):
 
         print(f"Downloading {key} -> {local_path}")
         s3.download_file(bucket_name, key, local_path)
-        print("Download complete")
+
+        print(f"Extracting {local_gz} -> {local_unzipped}")
+        with gzip.open(local_gz, 'rb') as f_in:
+            with open(local_unzipped, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
+        os.remove(local_gz)
+        print(f"Deleted compressed file: {local_gz}")
 
     return {
     "status" : "success"
