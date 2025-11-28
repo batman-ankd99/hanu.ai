@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 s3 = boto3.client('s3')
 
 def s3_file_download(year, month, day, bucket_name, aws_ac_num):
+    date_str = f"{year}/{month}/{day}"
+    print = f"this will download vpc flow log of date -> {date_Str}"
 
     prefix = f"AWSLogs/{aws_ac_num}/vpcflowlogs/us-east-1/{year}/{month:02d}/{day:02d}/"
     local_folder = f"/opt/{year}-{month:02d}-{day:02d}"
