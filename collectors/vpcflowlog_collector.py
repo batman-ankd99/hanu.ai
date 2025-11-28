@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 s3 = boto3.client('s3')
 
-def s3_file_download(year, month, day, bucket_name, aws_ac_num):
+def collect_vpcflowlog_data(year, month, day, bucket_name, aws_ac_num):
     date_str = f"{year}/{month}/{day}"
     print = f"this will download vpc flow log of date -> {date_Str}"
 
@@ -27,13 +27,10 @@ def s3_file_download(year, month, day, bucket_name, aws_ac_num):
         s3.download_file(bucket_name, key, local_path)
         print("Download complete")
 
-#now to calculate n-1 day time
+    return {
+    "status" : "success",
+    
+    }
 
-yesterday = datetime.utcnow() - timedelta(days=1)
-year = yesterday.year
-month = yesterday.month
-day = yesterday.day
-flow_log_bucket = "vpc-flow-log-hanu"
-aws_acc_num = 426728253870
-
-s3_file_download(year, month, day, flow_log_bucket, aws_acc_num)
+if __name__ == "__main__":
+    collect_vpcflowlog_data()

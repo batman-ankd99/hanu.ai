@@ -7,6 +7,7 @@ from collectors import sg_collector
 from collectors import s3_collector
 from collectors import iampolicy_collector
 from collectors import iampolicystatements_collector
+from collectors import vpcflowlog_collector
 
 from analyzers import analytics_layer_iam
 from analyzers import analytics_layer_sg
@@ -56,6 +57,19 @@ def run_collector_iampolicystatements():
     """Run the iampolicystatements data collector and return results"""
     results_iampolicystatements = iampolicystatements_collector.collect_iampolicystatements_data()
     return jsonify(results_iampolicystatements)
+
+@app.route('/collect/vpcflowlog', methods=['GET'])
+def run_collector_vpcflowlog():
+    """Run the vpcflowlog data collector and return results"""
+    yesterday = datetime.utcnow() - timedelta(days=1)
+    year = yesterday.year
+    month = yesterday.month
+    day = yesterday.day
+    flow_log_bucket = "vpc-flow-log-hanu"
+    aws_acc_num = 426728253870
+
+    results_vpcflowlog = vpcflowlog_collector.collect_vpcflowlog_data(year, month, day, flow_log_bucket, aws_acc_num)
+    return jsonify(results_vpcflowlog)
 
 @app.route('/analyzer/sg', methods=['GET'])
 def run_analyzer_sg():
