@@ -22,14 +22,14 @@ from core.rule_engine import evaluate_all
 app = Flask(__name__)
 CORS(app)
 
-# ---------------- DB CONFIG ----------------
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://user:password@localhost/cloud_audit"
+# ---------------- DB CONFIG (FIXED) ----------------
+app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://cloud_user:StrongPassword123@127.0.0.1/cloud_audit"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
 
-# ---------------- MODEL (NO models.py needed) ----------------
+# ---------------- MODEL ----------------
 class Finding(db.Model):
     __tablename__ = "finding"
 
@@ -113,7 +113,7 @@ def run_analyzer_iam_useraccesskey():
     return jsonify(analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey())
 
 
-# ---------------- FINDINGS (WITH DB SAVE FIX) ----------------
+# ---------------- FINDINGS (DB SAVE ENABLED) ----------------
 @app.route('/findings', methods=['GET'])
 def get_findings():
 
