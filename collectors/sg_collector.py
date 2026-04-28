@@ -4,6 +4,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 import json
+#rule engine import
+from core.rule_engine import evaluate_finding
 
 
 def collect_sg_data():
@@ -21,6 +23,9 @@ def collect_sg_data():
 
     sgs = []
     sg_live_list = []
+
+    # findings list
+    findings = []
 
     for sg in sg_response['SecurityGroups']:
 
@@ -65,12 +70,25 @@ def collect_sg_data():
             group_id,
             group_name,
             description,
-            json.dumps(inbound_rules),   # storing as json object as 1sg can have any no. of rules
-            json.dumps(outbound_rules),  # json
+            json.dumps(inbound_rules),
+            json.dumps(outbound_rules),
             scan_time
         ))
 
         sg_live_list.append(group_id)
+
+        # 🔥 step 6 - rule engine call (minimal addition)
+        sg_attributes = {
+            "inbound_rules": inbound_rules
+        }
+
+        sg_findings = evaluate_finding(
+            "sg",
+            group_id,
+            sg_attributes
+        )
+
+        findings.extend(sg_findings)
 
     # db connection
     try:
@@ -82,6 +100,7 @@ def collect_sg_data():
         )
         cursor = conn.cursor()
         print("Database connected")
+
     except Exception as e:
         print("Database connection failed:", e)
         return {"status": "error", "message": str(e)}
@@ -113,11 +132,42 @@ def collect_sg_data():
     """
     cursor.execute(delete_query, (sg_current,))
 
+    #  findings table insert (minimal addition)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS findings (
+        id SERIAL PRIMARY KEY,
+        rule_id TEXT,
+        severity TEXT,
+        description TEXT,
+        resource_id TEXT,
+        detected_at TIMESTAMP
+    )
+    """)
+
+    insert_finding = """
+    INSERT INTO findings
+    (rule_id, severity, description, resource_id, detected_at)
+    VALUES (%s, %s, %s, %s, %s)
+    """
+
+    for f in findings:
+        cursor.execute(insert_finding, (
+            f["rule_id"],
+            f["severity"],
+            f["description"],
+            f["resource_id"],
+            f["detected_at"]
+        ))
+
     conn.commit()
     cursor.close()
     conn.close()
 
-    return {"status": "success", "count": len(sgs)}
+    return {
+        "status": "success",
+        "count": len(sgs),
+        "findings": len(findings)
+    }
 
 
 # Allow running directly or importing in collector.py file
