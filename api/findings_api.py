@@ -1,12 +1,44 @@
 from flask import Flask, request, jsonify
-import psycopg2
 from db_utils import get_db_connection
+from db.findings_store import save_findings
+
+# 👇 your aggregator (IMPORTANT)
+from findings_api import get_all_findings
 
 app = Flask(__name__)
 
 
 # -------------------------
-# GET ALL FINDINGS
+# TRIGGER SCAN (NEW - IMPORTANT)
+# -------------------------
+@app.route("/scan", methods=["POST"])
+def scan_findings():
+
+    try:
+        # 1. Run collectors + analytics
+        all_data = get_all_findings()
+
+        findings = all_data.get("findings", [])
+
+        # 2. Save to DB
+        save_findings(findings)
+
+        return jsonify({
+            "status": "success",
+            "message": "Scan completed",
+            "summary": all_data.get("summary", {}),
+            "count": len(findings)
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        })
+
+
+# -------------------------
+# GET ALL FINDINGS (FROM DB)
 # -------------------------
 @app.route("/findings", methods=["GET"])
 def get_findings():
@@ -19,17 +51,17 @@ def get_findings():
 
         if severity:
             query = """
-                SELECT rule_id, severity, description, resource_id, detected_at
+                SELECT id, severity, finding, resource_id, created_at
                 FROM findings
                 WHERE severity = %s
-                ORDER BY detected_at DESC;
+                ORDER BY created_at DESC;
             """
             cursor.execute(query, (severity,))
         else:
             query = """
-                SELECT rule_id, severity, description, resource_id, detected_at
+                SELECT id, severity, finding, resource_id, created_at
                 FROM findings
-                ORDER BY detected_at DESC;
+                ORDER BY created_at DESC;
             """
             cursor.execute(query)
 
@@ -38,11 +70,11 @@ def get_findings():
         results = []
         for r in rows:
             results.append({
-                "rule_id": r[0],
+                "id": r[0],
                 "severity": r[1],
-                "description": r[2],
+                "finding": r[2],
                 "resource_id": r[3],
-                "detected_at": str(r[4])
+                "created_at": str(r[4])
             })
 
         cursor.close()
@@ -62,7 +94,7 @@ def get_findings():
 
 
 # -------------------------
-# RISK SUMMARY (PRISMA STYLE)
+# RISK SUMMARY
 # -------------------------
 @app.route("/risk-summary", methods=["GET"])
 def risk_summary():

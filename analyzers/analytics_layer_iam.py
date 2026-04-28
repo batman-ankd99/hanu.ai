@@ -5,6 +5,7 @@ from dotenv import load_dotenv #to load .env files key value in enviroment of ap
 import os
 from db_utils import get_db_connection
 from tabulate import tabulate
+import uuid
 
 def analytics_iam():
 
@@ -47,14 +48,38 @@ def analytics_iam():
             cursor.close()
         if 'conn' in locals():
             conn.close()
+    findings = []
+    for row in rows:
+    record = dict(zip(colnames, row))
 
-    records = [dict(zip(colnames, row)) for row in rows]
+    # Determine severity
+    if record.get("principal") == "*" and record.get("actions") == "*":
+        severity = "CRITICAL"
+    elif record.get("principal") == "*" or record.get("actions") == "*":
+        severity = "HIGH"
+    else:
+        severity = "MEDIUM"
+
+    finding = {
+        "id": str(uuid.uuid4()),
+        "service": "iam",
+        "resource_type": "iam_policy",
+        "resource_id": record.get("policy_name"),
+        "finding": f"Policy allows overly permissive access (Principal: {record.get('principal')}, Actions: {record.get('actions')})",
+        "severity": severity,
+        "status": "OPEN",
+        "recommendation": "Restrict '*' in Principal or Actions to least privilege",
+        "created_at": datetime.utcnow().isoformat()
+    }
+
+    findings.append(finding)
 
     return {
-        "status": "success",
-        "count": len(records),
-        "records": records
+    "status": "success",
+    "count": len(findings),
+    "findings": findings
     }
+
 
 # Allow direct run
 if __name__ == "__main__":

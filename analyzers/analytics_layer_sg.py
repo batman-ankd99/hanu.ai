@@ -1,10 +1,10 @@
 import boto3
-import psycopg2 #to connect to postgres
+import psycopg2
 from datetime import datetime
-from dotenv import load_dotenv #to load .env files key value in enviroment of app
+from dotenv import load_dotenv
 import os
+import uuid
 from db_utils import get_db_connection
-from tabulate import tabulate
 
 def analytics_sg():
 
@@ -29,41 +29,67 @@ def analytics_sg():
             outbound_rules @> '[{"protocol": "-1"}]'::jsonb;
         """
 
-        # Execute the query
         cursor.execute(select_query)
 
-        # Fetch all rows
-        rows = cursor.fetchall() #all rows fetched from select query are brought into python memory, as a tuple
-        colnames = [desc[0] for desc in cursor.description] #after query, cursor.description gives metadata about each returned column, so desc[0] only fetches column name
-        #its a list of tuples - (('id', ...), ('effect', ...), ('principal', ...), ('actions', ...), ...)
+        rows = cursor.fetchall()
+        colnames = [desc[0] for desc in cursor.description]
 
-#        print("\n SG rules that contains traffic to go or come from anywhere, this puts Infra at risk. Are as below:")
-#        print(tabulate(rows, headers=colnames, tablefmt="psql"))
+        findings = []
 
-        records = []
         for row in rows:
-            item = {}
-            for idx, col in enumerate(colnames):
-                item[col] = row[idx]
-            records.append(item)
+            record = dict(zip(colnames, row))
+
+            inbound = str(record.get("inbound_rules"))
+            outbound = str(record.get("outbound_rules"))
+
+            # 🔍 Determine severity
+            if '"protocol": "-1"' in inbound or '"protocol": "-1"' in outbound:
+                severity = "CRITICAL"
+                issue = "Allows all protocols"
+            elif '"0.0.0.0/0"' in inbound:
+                severity = "HIGH"
+                issue = "Open to world (inbound)"
+            elif '"0.0.0.0/0"' in outbound:
+                severity = "MEDIUM"
+                issue = "Open to world (outbound)"
+            else:
+                severity = "LOW"
+                issue = "Potential misconfiguration"
+
+            # 🧩 Build finding
+            finding = {
+                "id": str(uuid.uuid4()),
+                "service": "ec2",
+                "resource_type": "security_group",
+                "resource_id": record.get("group_id"),
+                "finding": f"Security Group {record.get('group_name')} is risky: {issue}",
+                "severity": severity,
+                "status": "OPEN",
+                "recommendation": "Restrict CIDR ranges and avoid allowing all protocols",
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            findings.append(finding)
+
         return {
             "status": "success",
-            "count": len(records),
-            "records": records
+            "count": len(findings),
+            "findings": findings
         }
+
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
 
-    # Cleanup
     finally:
         if 'cursor' in locals():
             cursor.close()
         if 'conn' in locals():
             conn.close()
 
+
 # Allow direct run
 if __name__ == "__main__":
-    analytics_sg()
+    print(analytics_sg())
