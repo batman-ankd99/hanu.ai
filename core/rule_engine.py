@@ -65,3 +65,47 @@ def make_finding(rule, resource_id):
         "resource_id": resource_id,
         "detected_at": datetime.utcnow()
     }
+
+def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
+    findings = []
+
+    # ---------------- S3 ----------------
+    if s3_data:
+        for bucket in s3_data.get("records", []):
+            findings.extend(
+                evaluate_finding(
+                    "s3",
+                    bucket.get("bucket_name"),
+                    {
+                        "public_access": bucket.get("public_access")
+                    }
+                )
+            )
+
+    # ---------------- SG ----------------
+    if sg_data:
+        for sg in sg_data.get("records", []):
+            findings.extend(
+                evaluate_finding(
+                    "sg",
+                    sg.get("group_id"),
+                    {
+                        "inbound_rules": sg.get("inbound_rules", [])
+                    }
+                )
+            )
+
+    # ---------------- IAM ----------------
+    if iam_data:
+        for iam in iam_data.get("records", []):
+            findings.extend(
+                evaluate_finding(
+                    "iam_policy",
+                    iam.get("policy_arn"),
+                    {
+                        "is_action_star": iam.get("is_action_star", False)
+                    }
+                )
+            )
+
+    return findings    

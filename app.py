@@ -14,127 +14,96 @@ from analyzers import analytics_layer_iam
 from analyzers import analytics_layer_sg
 from analyzers import analytics_layer_iam_useraccesskey
 
-app = Flask(__name__)  # create Flask app, initializes flask app
+# 👇 NEW IMPORT (rule engine brain)
+from core.rule_engine import evaluate_all
 
-# Enable CORS for all routes
+
+app = Flask(__name__)
 CORS(app)
 
-@app.route('/')     #simple home page api
+@app.route('/')
 def home():
     return "AWS Collector API is running"
 
-@app.route('/collect', methods=['GET']) #when client sends get request to /collect, Flask will call run_collector()
-def run_collector():
-    """Run the full data collector and return results"""
-    results = collector.collect_all()  # call your collector_all function from collector.py file
-    return jsonify(results)  # return JSON response
 
+# ---------------- FULL COLLECTION ----------------
+@app.route('/collect', methods=['GET'])
+def run_collector():
+    results = collector.collect_all()
+    return jsonify(results)
+
+
+# ---------------- INDIVIDUAL COLLECTORS ----------------
 @app.route('/collect/ec2', methods=['GET'])
 def run_collector_ec2():
-    """Run the Ec2 data collector and return results"""
-    results_ec2 = ec2_collector.collect_ec2_data()
-    return jsonify(results_ec2)
+    return jsonify(ec2_collector.collect_ec2_data())
 
 @app.route('/collect/sg', methods=['GET'])
 def run_collector_sg():
-    """Run the SG data collector and return results"""
-    results_sg = sg_collector.collect_sg_data()
-    return jsonify(results_sg)
+    return jsonify(sg_collector.collect_sg_data())
 
 @app.route('/collect/s3', methods=['GET'])
 def run_collector_s3():
-    """Run the Ec2 data collector and return results"""
-    results_s3 = s3_collector.collect_s3_data()
-    return jsonify(results_s3)
+    return jsonify(s3_collector.collect_s3_data())
 
 @app.route('/collect/iampolicy', methods=['GET'])
 def run_collector_iampolicy():
-    """Run the iam policy data collector and return results"""
-    results_iampolicy = iampolicy_collector.collect_iampolicy_data()
-    return jsonify(results_iampolicy)
+    return jsonify(iampolicy_collector.collect_iampolicy_data())
 
 @app.route('/collect/iampolicystatements', methods=['GET'])
 def run_collector_iampolicystatements():
-    """Run the iampolicystatements data collector and return results"""
-    results_iampolicystatements = iampolicystatements_collector.collect_iampolicystatements_data()
-    return jsonify(results_iampolicystatements)
+    return jsonify(iampolicystatements_collector.collect_iampolicystatements_data())
 
 @app.route('/collect/vpcflowlog', methods=['GET'])
 def run_collector_vpcflowlog():
-    """Run the vpcflowlog data collector and return results"""
     yesterday = datetime.utcnow() - timedelta(days=1)
-    year = yesterday.year
-    month = yesterday.month
-    day = yesterday.day
-    flow_log_bucket = "vpc-flow-log-hanu"
-    aws_acc_num = 426728253870
+    return jsonify(
+        vpcflowlog_collector.collect_vpcflowlog_data(
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            "vpc-flow-log-hanu",
+            426728253870
+        )
+    )
 
-    results_vpcflowlog = vpcflowlog_collector.collect_vpcflowlog_data(year, month, day, flow_log_bucket, aws_acc_num)
-    return jsonify(results_vpcflowlog)
 
+# ---------------- ANALYZERS (OLD STYLE) ----------------
 @app.route('/analyzer/sg', methods=['GET'])
 def run_analyzer_sg():
-    """Run the analytics function to show faulty SG rules"""
-    results_analytics_sg = analytics_layer_sg.analytics_sg()
-    return jsonify(results_analytics_sg)
+    return jsonify(analytics_layer_sg.analytics_sg())
 
 @app.route('/analyzer/iam', methods=['GET'])
 def run_analyzer_iam():
-    """Run the analytics function to show faulty iam policies"""
-    results_analytics_iam = analytics_layer_iam.analytics_iam()
-    return jsonify(results_analytics_iam)
+    return jsonify(analytics_layer_iam.analytics_iam())
 
 @app.route('/analyzer/iam_useraccesskey', methods=['GET'])
 def run_analyzer_iam_useraccesskey():
-    """Run the analytics function to show IAM User access keys greater than 1 day"""
-    results_analytics_iam_useraccesskey = analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey()
-    return jsonify(results_analytics_iam_useraccesskey)
+    return jsonify(analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey())
 
+
+# ---------------- PRISMA STYLE FINDINGS ENGINE (NEW) ----------------
 @app.route('/findings', methods=['GET'])
 def get_findings():
-    """
-    Central Prisma-style findings API
-    Aggregates all analyzer outputs into one view
-    """
 
+    # collect raw data
     sg = analytics_layer_sg.analytics_sg()
     iam = analytics_layer_iam.analytics_iam()
-    iam_keys = analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey()
+    s3 = s3_collector.collect_s3_data()
 
-    findings = []
-
-    # ---------------- SG findings ----------------
-    for r in sg.get("records", []):
-        findings.append({
-            "rule_id": "SG_OPEN_RULE",
-            "severity": "HIGH",
-            "description": "Security Group has overly permissive rules",
-            "resource_id": r.get("group_id")
-        })
-
-    # ---------------- IAM findings ----------------
-    for r in iam.get("records", []):
-        findings.append({
-            "rule_id": "IAM_WILDCARD_POLICY",
-            "severity": "HIGH",
-            "description": "IAM policy contains wildcard permissions or risky access",
-            "resource_id": r.get("id")
-        })
-
-    # ---------------- IAM ACCESS KEY findings ----------------
-    for r in iam_keys.get("records", []):
-        findings.append({
-            "rule_id": "IAM_OLD_ACCESS_KEY",
-            "severity": "MEDIUM",
-            "description": "Access key older than threshold",
-            "resource_id": r.get("UserName")
-        })
+    # 🧠 RULE ENGINE (single brain now)
+    findings = evaluate_all(
+        sg_data=sg,
+        iam_data=iam,
+        s3_data=s3
+    )
 
     return jsonify({
         "status": "success",
         "count": len(findings),
         "findings": findings
-    })    
+    })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
