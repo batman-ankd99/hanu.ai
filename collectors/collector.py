@@ -3,6 +3,7 @@ from collectors.sg_collector import collect_sg_data
 from collectors.s3_collector import collect_s3_data
 from collectors.iampolicy_collector import collect_iampolicy_data
 from collectors.iampolicystatements_collector import collect_iampolicystatements_data
+from collectors.iam_mfa_collector import collect_iam_mfa_data
 import time
 import logging
 
@@ -21,6 +22,7 @@ def collect_all():
         results["s3"] = collect_s3_data()
         results["iampolicy"] = collect_iampolicy_data()
         results["iampolicy_statements"] = collect_iampolicystatements_data()
+        results["iam_mfa"] = collect_iam_mfa_data()
 
         duration = round(time.time() - start, 2) # 2 is to round of till 2 digits after substraction
         logging.info(f"Collection complete in {duration}s")
