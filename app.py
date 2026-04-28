@@ -90,5 +90,51 @@ def run_analyzer_iam_useraccesskey():
     results_analytics_iam_useraccesskey = analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey()
     return jsonify(results_analytics_iam_useraccesskey)
 
+@app.route('/findings', methods=['GET'])
+def get_findings():
+    """
+    Central Prisma-style findings API
+    Aggregates all analyzer outputs into one view
+    """
+
+    sg = analytics_layer_sg.analytics_sg()
+    iam = analytics_layer_iam.analytics_iam()
+    iam_keys = analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey()
+
+    findings = []
+
+    # ---------------- SG findings ----------------
+    for r in sg.get("records", []):
+        findings.append({
+            "rule_id": "SG_OPEN_RULE",
+            "severity": "HIGH",
+            "description": "Security Group has overly permissive rules",
+            "resource_id": r.get("group_id")
+        })
+
+    # ---------------- IAM findings ----------------
+    for r in iam.get("records", []):
+        findings.append({
+            "rule_id": "IAM_WILDCARD_POLICY",
+            "severity": "HIGH",
+            "description": "IAM policy contains wildcard permissions or risky access",
+            "resource_id": r.get("id")
+        })
+
+    # ---------------- IAM ACCESS KEY findings ----------------
+    for r in iam_keys.get("records", []):
+        findings.append({
+            "rule_id": "IAM_OLD_ACCESS_KEY",
+            "severity": "MEDIUM",
+            "description": "Access key older than threshold",
+            "resource_id": r.get("UserName")
+        })
+
+    return jsonify({
+        "status": "success",
+        "count": len(findings),
+        "findings": findings
+    })    
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
