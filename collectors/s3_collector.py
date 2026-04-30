@@ -1,12 +1,11 @@
 import boto3
-from db_utils import get_db_connection
 from core.rule_engine import evaluate_finding
 
 
 def collect_s3_data():
     """
-    Collect S3 bucket metadata, run rule engine,
-    and store findings with dedup protection.
+    ONLY fetch S3 data + run rule engine.
+    NO DB writes here.
     """
 
     s3_client = boto3.client("s3")
@@ -25,7 +24,7 @@ def collect_s3_data():
         except Exception:
             region = "unknown"
 
-        # ---------------- PUBLIC ACCESS CHECK ----------------
+        # ---------------- PUBLIC ACCESS ----------------
         public_access = "private"
 
         try:
@@ -38,7 +37,7 @@ def collect_s3_data():
         except Exception:
             public_access = "public"
 
-        # ---------------- ENCRYPTION CHECK ----------------
+        # ---------------- ENCRYPTION ----------------
         try:
             enc = s3_client.get_bucket_encryption(Bucket=bucket_name)
             rules = enc["ServerSideEncryptionConfiguration"]["Rules"]
@@ -58,53 +57,6 @@ def collect_s3_data():
         )
 
         findings.extend(bucket_findings)
-
-    # ---------------- DB SAVE (DEDUP SAFE) ----------------
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        print("DB connected")
-
-        insert_query = """
-        INSERT INTO findings (
-            dedup_key,
-            service,
-            resource_type,
-            resource_id,
-            finding,
-            severity,
-            status,
-            recommendation,
-            created_at,
-            updated_at
-        )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now(),now())
-        ON CONFLICT (dedup_key) DO NOTHING;
-        """
-
-        for f in findings:
-            cursor.execute(insert_query, (
-                f["dedup_key"],
-                f["service"],
-                f["resource_type"],
-                f["resource_id"],
-                f["finding"],
-                f["severity"],
-                f.get("status", "open"),
-                f.get("recommendation", "")
-            ))
-
-        conn.commit()
-
-        print("S3 findings saved (dedup enabled)")
-
-    except Exception as e:
-        print("DB error:", e)
-
-    finally:
-        cursor.close()
-        conn.close()
 
     return {
         "status": "success",

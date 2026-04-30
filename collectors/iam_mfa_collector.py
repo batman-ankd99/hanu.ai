@@ -5,16 +5,29 @@ from db_utils import get_db_connection
 
 def collect_iam_mfa_data():
     """
-    Collect IAM MFA status for users and store in DB.
+    Collect IAM MFA status for all users and store in DB safely.
     """
 
     iam = boto3.client("iam")
-    users = iam.list_users()["Users"]
+
+    # ---------------- PAGINATION SAFE ----------------
+    users = []
+    marker = None
+
+    while True:
+        response = iam.list_users(Marker=marker) if marker else iam.list_users()
+        users.extend(response.get("Users", []))
+
+        marker = response.get("Marker")
+        if not response.get("IsTruncated"):
+            break
 
     results = []
 
+    # ---------------- MFA CHECK ----------------
     for user in users:
-        username = user["UserName"]
+
+        username = user.get("UserName")
 
         try:
             mfa_devices = iam.list_mfa_devices(UserName=username).get("MFADevices", [])
@@ -29,9 +42,14 @@ def collect_iam_mfa_data():
         ))
 
     # ---------------- DB WRITE ----------------
+    conn = None
+    cursor = None
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        print("DB connected (IAM MFA)")
 
         insert_query = """
         INSERT INTO iam_mfa_status (username, mfa_enabled, scan_time)
@@ -50,11 +68,15 @@ def collect_iam_mfa_data():
         print("IAM MFA data saved successfully")
 
     except Exception as e:
-        print("DB error:", e)
+        if conn:
+            conn.rollback()
+        print("IAM MFA DB error:", e)
 
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
     return {
         "status": "success",

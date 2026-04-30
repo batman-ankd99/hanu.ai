@@ -7,23 +7,36 @@ from db_utils import get_db_connection
 
 def collect_iampolicystatements_data():
     """
-    Collect IAM policy statements and store in PostgreSQL.
-    Clean, safe, and consistent collector.
+    Collect IAM policy statements safely with pagination + robust parsing.
     """
 
     iam = boto3.client("iam")
 
-    # ---------------- LIST POLICIES ----------------
-    response = iam.list_policies(Scope="Local")
-    policies = response.get("Policies", [])
+    # ---------------- PAGINATION ----------------
+    policy_arns = []
+    marker = None
 
-    policy_arns = [p.get("Arn") for p in policies if p.get("Arn")]
+    while True:
+        response = iam.list_policies(
+            Scope="Local",
+            Marker=marker
+        ) if marker else iam.list_policies(Scope="Local")
+
+        policies = response.get("Policies", [])
+        policy_arns.extend([p.get("Arn") for p in policies if p.get("Arn")])
+
+        marker = response.get("Marker")
+        if not response.get("IsTruncated"):
+            break
+
+    # ---------------- DB CONNECTION ----------------
+    conn = None
+    cur = None
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-
-        print("DB connected")
+        print("DB connected (IAM Statements)")
 
     except Exception as e:
         print("DB connection failed:", e)
@@ -69,20 +82,26 @@ def collect_iampolicystatements_data():
                 policy_detail = iam.get_policy(PolicyArn=policy_arn)
                 policy_name = policy_detail["Policy"]["PolicyName"]
 
-                version_id = policy_detail["Policy"]["DefaultVersionId"]
+                version_id = policy_detail["Policy"].get("DefaultVersionId")
+                if not version_id:
+                    continue
 
                 policy_version = iam.get_policy_version(
                     PolicyArn=policy_arn,
                     VersionId=version_id
                 )
 
-                statements = policy_version["PolicyVersion"]["Document"].get("Statement", [])
+                doc = policy_version["PolicyVersion"]["Document"]
+                statements = doc.get("Statement", [])
+
+                if not statements:
+                    continue
 
                 if not isinstance(statements, list):
                     statements = [statements]
 
             except Exception as e:
-                print(f"Skipping policy {policy_arn}: {e}")
+                print(f"Skipping {policy_arn}: {e}")
                 continue
 
             # ---------------- PROCESS STATEMENTS ----------------
@@ -99,12 +118,14 @@ def collect_iampolicystatements_data():
                 # normalize
                 if isinstance(actions, str):
                     actions = [actions]
-
                 if isinstance(resources, str):
                     resources = [resources]
 
+                # ---------------- IMPROVED WILDCARD DETECTION ----------------
                 is_principal_star = (
                     principal == "*"
+                    or principal == {"AWS": "*"}
+                    or principal == {"Service": "*"}
                     or (isinstance(principal, dict) and "*" in str(principal))
                 )
 
@@ -134,12 +155,15 @@ def collect_iampolicystatements_data():
         print(f"IAM policy statements inserted: {count}")
 
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         print("Insert failed:", e)
 
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return {
         "status": "success",

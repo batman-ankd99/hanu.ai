@@ -7,7 +7,7 @@ from db_utils import get_db_connection
 def collect_iampolicy_data():
     """
     Collect IAM policy metadata and store in PostgreSQL.
-    Clean + consistent with SG/S3 pipeline.
+    Clean + safe + consistent with SG/S3 collectors.
     """
 
     iam = boto3.client("iam")
@@ -19,7 +19,7 @@ def collect_iampolicy_data():
 
     for policy in policies:
 
-        policy_arn = policy.get("Arn")
+        policy_arn = policy.get("Arn") or ""
         policy_name = policy.get("PolicyName")
         policy_id = policy.get("PolicyId")
         create_date = policy.get("CreateDate")
@@ -60,11 +60,14 @@ def collect_iampolicy_data():
         ))
 
     # ---------------- DB WRITE ----------------
+    conn = None
+    cursor = None
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        print("DB connected")
+        print("DB connected (IAM Policy)")
 
         insert_query = """
         INSERT INTO iam_policies (
@@ -95,11 +98,13 @@ def collect_iampolicy_data():
         print("IAM policy data saved successfully")
 
     except Exception as e:
-        print("DB error:", e)
+        print("IAM DB error:", e)
 
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
     return {
         "status": "success",
