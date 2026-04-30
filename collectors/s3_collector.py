@@ -5,7 +5,7 @@ from core.rule_engine import evaluate_finding
 def collect_s3_data():
     """
     Collect S3 bucket metadata and evaluate security rules.
-    No DB writes, no Flask code.
+    No DB writes. Returns findings for central processing.
     """
 
     s3_client = boto3.client("s3")
@@ -31,15 +31,15 @@ def collect_s3_data():
             block = s3_client.get_public_access_block(Bucket=bucket_name)
             config = block["PublicAccessBlockConfiguration"]
 
-            # if ANY block setting is False → bucket may be public
+            # If ANY block setting is False → potentially public
             is_public = not all(config.values())
             public_access = "public" if is_public else "private"
 
         except Exception:
-            # if API fails, assume risky (safe side)
+            # If API fails, assume risky (fail-safe)
             public_access = "public"
 
-        # ---------------- ENCRYPTION CHECK (optional future use) ----------------
+        # ---------------- ENCRYPTION CHECK ----------------
         try:
             enc = s3_client.get_bucket_encryption(Bucket=bucket_name)
             rules = enc["ServerSideEncryptionConfiguration"]["Rules"]
@@ -64,7 +64,7 @@ def collect_s3_data():
         "status": "success",
         "buckets": len(s3_response.get("Buckets", [])),
         "findings": len(findings),
-        "data": findings
+        "data": findings   # 🔥 CRITICAL for collector.py
     }
 
 

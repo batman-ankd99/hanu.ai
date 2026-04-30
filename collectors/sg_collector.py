@@ -4,8 +4,8 @@ from core.rule_engine import evaluate_finding
 
 def collect_sg_data():
     """
-    Collect Security Groups and run rule engine only.
-    No DB writes here.
+    Collect Security Groups and evaluate security rules.
+    No DB writes. Returns findings for central processing.
     """
 
     ec2_client = boto3.client("ec2")
@@ -20,18 +20,24 @@ def collect_sg_data():
         inbound_rules = []
         outbound_rules = []
 
-        # ---------------- INBOUND ----------------
+        # ---------------- INBOUND RULES ----------------
         for entry in sg.get("IpPermissions", []):
             for cidr in entry.get("IpRanges", []):
                 inbound_rules.append({
-                    "cidr": cidr.get("CidrIp")
+                    "cidr": cidr.get("CidrIp"),
+                    "protocol": entry.get("IpProtocol"),
+                    "from_port": entry.get("FromPort"),
+                    "to_port": entry.get("ToPort")
                 })
 
-        # ---------------- OUTBOUND ----------------
+        # ---------------- OUTBOUND RULES ----------------
         for entry in sg.get("IpPermissionsEgress", []):
             for cidr in entry.get("IpRanges", []):
                 outbound_rules.append({
-                    "cidr": cidr.get("CidrIp")
+                    "cidr": cidr.get("CidrIp"),
+                    "protocol": entry.get("IpProtocol"),
+                    "from_port": entry.get("FromPort"),
+                    "to_port": entry.get("ToPort")
                 })
 
         # ---------------- RULE ENGINE ----------------
@@ -50,7 +56,7 @@ def collect_sg_data():
         "status": "success",
         "count": len(sg_response.get("SecurityGroups", [])),
         "findings": len(findings),
-        "data": findings   # 🔥 IMPORTANT: helps debugging/UI later
+        "data": findings   # 🔥 CRITICAL for collector.py DB save
     }
 
 
