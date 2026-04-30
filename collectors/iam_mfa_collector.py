@@ -2,7 +2,11 @@ import boto3
 from datetime import datetime
 from db_utils import get_db_connection
 
+
 def collect_iam_mfa_data():
+    """
+    Collect IAM MFA status for users and store in DB.
+    """
 
     iam = boto3.client("iam")
     users = iam.list_users()["Users"]
@@ -12,10 +16,11 @@ def collect_iam_mfa_data():
     for user in users:
         username = user["UserName"]
 
-        # Check MFA devices
-        mfa_devices = iam.list_mfa_devices(UserName=username)["MFADevices"]
-
-        mfa_enabled = len(mfa_devices) > 0
+        try:
+            mfa_devices = iam.list_mfa_devices(UserName=username).get("MFADevices", [])
+            mfa_enabled = len(mfa_devices) > 0
+        except Exception:
+            mfa_enabled = False
 
         results.append((
             username,
@@ -23,18 +28,10 @@ def collect_iam_mfa_data():
             datetime.utcnow()
         ))
 
-    # store in DB
+    # ---------------- DB WRITE ----------------
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS iam_mfa_status (
-            username TEXT PRIMARY KEY,
-            mfa_enabled BOOLEAN,
-            scan_time TIMESTAMP
-        )
-        """)
 
         insert_query = """
         INSERT INTO iam_mfa_status (username, mfa_enabled, scan_time)
@@ -49,11 +46,15 @@ def collect_iam_mfa_data():
             cursor.execute(insert_query, r)
 
         conn.commit()
-        cursor.close()
-        conn.close()
+
+        print("IAM MFA data saved successfully")
 
     except Exception as e:
         print("DB error:", e)
+
+    finally:
+        cursor.close()
+        conn.close()
 
     return {
         "status": "success",
@@ -62,4 +63,4 @@ def collect_iam_mfa_data():
 
 
 if __name__ == "__main__":
-    collect_iam_mfa_data()
+    print(collect_iam_mfa_data())

@@ -1,44 +1,46 @@
 import boto3
 from datetime import datetime
-from dotenv import load_dotenv
-import os
 import json
-import psycopg2
 from db_utils import get_db_connection
 
+
 def collect_iampolicy_data():
-    """Collect AWS IAM Policy details and store them in PostgreSQL."""
-    load_dotenv(".env.prod")
+    """
+    Collect IAM policy metadata and store in PostgreSQL.
+    Clean + consistent with SG/S3 pipeline.
+    """
 
-    # Postgres DB connection details
-    db_host = os.getenv("DB_HOST")
-    db_name = os.getenv("DB_NAME")
-    db_user = os.getenv("DB_USER")
-    db_pass = os.getenv("DB_PASS")
+    iam = boto3.client("iam")
 
-    iam = boto3.client('iam')
-
-    response = iam.list_policies(Scope='All')
-    policy_list_allinfo = response['Policies']
+    response = iam.list_policies(Scope="All")
+    policies = response.get("Policies", [])
 
     iam_data = []
 
-    for policy in policy_list_allinfo:
-        policy_arn = policy['Arn']
-        policy_name = policy['PolicyName']
-        policy_id = policy['PolicyId']
-        create_date = policy.get('CreateDate')
-        update_date = policy.get('UpdateDate')
+    for policy in policies:
+
+        policy_arn = policy.get("Arn")
+        policy_name = policy.get("PolicyName")
+        policy_id = policy.get("PolicyId")
+        create_date = policy.get("CreateDate")
+        update_date = policy.get("UpdateDate")
         scan_time = datetime.utcnow()
 
-        # Determine AWS-managed vs customer-managed - True or False
         is_aws_managed = policy_arn.startswith("arn:aws:iam::aws:policy/")
 
-        # Collect attached entities (groups, users, roles)
-        entities = iam.list_entities_for_policy(PolicyArn=policy_arn)
-        attached_groups = [g['GroupName'] for g in entities['PolicyGroups']]
-        attached_users = [u['UserName'] for u in entities['PolicyUsers']]
-        attached_roles = [r['RoleName'] for r in entities['PolicyRoles']]
+        # ---------------- ATTACHED ENTITIES ----------------
+        try:
+            entities = iam.list_entities_for_policy(PolicyArn=policy_arn)
+        except Exception:
+            entities = {
+                "PolicyGroups": [],
+                "PolicyUsers": [],
+                "PolicyRoles": []
+            }
+
+        attached_groups = [g.get("GroupName") for g in entities.get("PolicyGroups", [])]
+        attached_users = [u.get("UserName") for u in entities.get("PolicyUsers", [])]
+        attached_roles = [r.get("RoleName") for r in entities.get("PolicyRoles", [])]
 
         entity_list = {
             "Groups": attached_groups,
@@ -46,7 +48,6 @@ def collect_iampolicy_data():
             "Roles": attached_roles
         }
 
-        # Append tuple for DB insert
         iam_data.append((
             policy_arn,
             policy_name,
@@ -58,21 +59,13 @@ def collect_iampolicy_data():
             scan_time
         ))
 
-    # Print collected data
-#    for record in iam_data:
-#        print(record)
-
+    # ---------------- DB WRITE ----------------
     try:
-        conn = psycopg2.connect(
-            host=db_host,
-            database=db_name,
-            user=db_user,
-            password=db_pass
-        )
+        conn = get_db_connection()
         cursor = conn.cursor()
-        print("✅ Database connected successfully")
 
-        # insert query to push data to table
+        print("DB connected")
+
         insert_query = """
         INSERT INTO iam_policies (
             policy_arn,
@@ -94,23 +87,25 @@ def collect_iampolicy_data():
             scan_time = EXCLUDED.scan_time;
         """
 
-        for policy_info in iam_data:
-            cursor.execute(insert_query, tuple(policy_info))
+        for record in iam_data:
+            cursor.execute(insert_query, record)
 
         conn.commit()
-        print("✅ IAM policy data inserted/updated successfully")
+
+        print("IAM policy data saved successfully")
 
     except Exception as e:
-        print("❌ Database operation failed:", e)
+        print("DB error:", e)
 
     finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
+        cursor.close()
+        conn.close()
 
-    return {"status": "success", "count": len(iam_data)}
+    return {
+        "status": "success",
+        "count": len(iam_data)
+    }
 
-# Allow direct run
+
 if __name__ == "__main__":
-    collect_iampolicy_data()
+    print(collect_iampolicy_data())

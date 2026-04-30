@@ -1,32 +1,32 @@
 import boto3
 from datetime import datetime
-from dotenv import load_dotenv
-import os
 import json
-import psycopg2
 from psycopg2.extras import Json
-
 from db_utils import get_db_connection
 
 
 def collect_iampolicystatements_data():
-    """Collect AWS IAM Policy Statements details and store them in PostgreSQL."""
-
-    load_dotenv(".env.prod")
+    """
+    Collect IAM policy statements and store in PostgreSQL.
+    Clean, safe, and consistent collector.
+    """
 
     iam = boto3.client("iam")
 
+    # ---------------- LIST POLICIES ----------------
     response = iam.list_policies(Scope="Local")
-    policy_list_allinfo = response.get("Policies", [])
+    policies = response.get("Policies", [])
 
-    policy_arns = [p["Arn"] for p in policy_list_allinfo]
+    policy_arns = [p.get("Arn") for p in policies if p.get("Arn")]
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
+        print("DB connected")
+
     except Exception as e:
-        print("❌ Database connection failed:", e)
+        print("DB connection failed:", e)
         return {"status": "db_failed"}
 
     insert_query = """
@@ -65,21 +65,27 @@ def collect_iampolicystatements_data():
     try:
         for policy_arn in policy_arns:
 
-            policy_detail = iam.get_policy(PolicyArn=policy_arn)
-            policy_name = policy_detail["Policy"]["PolicyName"]
+            try:
+                policy_detail = iam.get_policy(PolicyArn=policy_arn)
+                policy_name = policy_detail["Policy"]["PolicyName"]
 
-            version_id = policy_detail["Policy"]["DefaultVersionId"]
+                version_id = policy_detail["Policy"]["DefaultVersionId"]
 
-            policy_version = iam.get_policy_version(
-                PolicyArn=policy_arn,
-                VersionId=version_id
-            )
+                policy_version = iam.get_policy_version(
+                    PolicyArn=policy_arn,
+                    VersionId=version_id
+                )
 
-            statements = policy_version["PolicyVersion"]["Document"]["Statement"]
+                statements = policy_version["PolicyVersion"]["Document"].get("Statement", [])
 
-            if not isinstance(statements, list):
-                statements = [statements]
+                if not isinstance(statements, list):
+                    statements = [statements]
 
+            except Exception as e:
+                print(f"Skipping policy {policy_arn}: {e}")
+                continue
+
+            # ---------------- PROCESS STATEMENTS ----------------
             for idx, st in enumerate(statements):
 
                 sid = st.get("Sid") or f"auto-{version_id}-{idx}"
@@ -125,11 +131,11 @@ def collect_iampolicystatements_data():
                 count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} IAM policy statements")
+        print(f"IAM policy statements inserted: {count}")
 
     except Exception as e:
         conn.rollback()
-        print("❌ Insert failed:", e)
+        print("Insert failed:", e)
 
     finally:
         cur.close()
@@ -142,4 +148,4 @@ def collect_iampolicystatements_data():
 
 
 if __name__ == "__main__":
-    collect_iampolicystatements_data()
+    print(collect_iampolicystatements_data())
