@@ -1,8 +1,10 @@
+import csv
+import io
+from flask import Response
 from sqlalchemy import text
 from flask import Flask, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
-
 from collectors import collector
 from collectors import ec2_collector
 from collectors import sg_collector
@@ -154,6 +156,50 @@ def run_scan():
             "message": str(e)
         }), 500
 
+#----------------csv file -----------
+@app.route('/findings/export/csv', methods=['GET'])
+def export_findings_csv():
+
+    results = db.session.execute(text("""
+        SELECT service, resource_type, resource_id, finding, severity, status
+        FROM findings
+        ORDER BY id DESC
+    """)).fetchall()
+
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # header
+    writer.writerow([
+        "service",
+        "resource_type",
+        "resource_id",
+        "finding",
+        "severity",
+        "status"
+    ])
+
+    # rows
+    for row in results:
+        writer.writerow([
+            row.service,
+            row.resource_type,
+            row.resource_id,
+            row.finding,
+            row.severity,
+            row.status
+        ])
+
+    output.seek(0)
+
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=vulnerabilities.csv"
+        }
+    )
 
 # ---------------- RISK SUMMARY ----------------
 @app.route('/risk-summary', methods=['GET'])
