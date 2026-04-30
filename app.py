@@ -116,29 +116,42 @@ def analyzer_iam_useraccesskey():
 @app.route('/findings', methods=['GET'])
 def get_findings():
 
-    # ALWAYS read directly from correct table
-    results = db.session.execute("SELECT * FROM findings").fetchall()
+    results = db.session.execute("""
+        SELECT id, service, resource_type, resource_id, finding, severity, status
+        FROM findings
+    """).fetchall()
 
     findings_list = []
 
+    severity_count = {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+    }
+
     for row in results:
+        severity = (row.severity or "").upper()
+
         findings_list.append({
             "id": row.id,
             "service": row.service,
             "resource_type": row.resource_type,
             "resource_id": row.resource_id,
             "finding": row.finding,
-            "severity": row.severity,
+            "severity": severity,
             "status": row.status
         })
 
+        if severity in severity_count:
+            severity_count[severity] += 1
+
     return jsonify({
         "status": "success",
-        "count": len(findings_list),
+        "total": len(findings_list),
+        "severity_breakdown": severity_count,
         "findings": findings_list
     })
-
-
 # ---------------- RUN APP ----------------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
