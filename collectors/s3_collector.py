@@ -4,63 +4,55 @@ from core.rule_engine import evaluate_finding
 
 def collect_s3_data():
     """
-    ONLY fetch S3 data + run rule engine.
-    NO DB writes here.
+    ONLY fetch S3 metadata.
+    NO DB writes.
+    ONLY returns raw data for rule engine.
     """
 
     s3_client = boto3.client("s3")
-    s3_response = s3_client.list_buckets()
+    response = s3_client.list_buckets()
 
-    findings = []
+    buckets = []
 
-    for bucket in s3_response.get("Buckets", []):
+    for bucket in response.get("Buckets", []):
+        bucket_name = bucket["Name"]
 
-        bucket_name = bucket.get("Name")
-
-        # ---------------- REGION ----------------
-        try:
-            region_res = s3_client.get_bucket_location(Bucket=bucket_name)
-            region = region_res.get("LocationConstraint") or "us-east-1"
-        except Exception:
-            region = "unknown"
-
-        # ---------------- PUBLIC ACCESS ----------------
-        public_access = "private"
-
+        # ---------------- PUBLIC ACCESS CHECK ----------------
         try:
             block = s3_client.get_public_access_block(Bucket=bucket_name)
-            config = block["PublicAccessBlockConfiguration"]
+            config = block.get("PublicAccessBlockConfiguration", {})
 
             is_public = not all(config.values())
             public_access = "public" if is_public else "private"
 
         except Exception:
+            # if config missing → assume risky
             public_access = "public"
 
-        # ---------------- ENCRYPTION ----------------
-        try:
-            enc = s3_client.get_bucket_encryption(Bucket=bucket_name)
-            rules = enc["ServerSideEncryptionConfiguration"]["Rules"]
-            algo = rules[0]["ApplyServerSideEncryptionByDefault"]["SSEAlgorithm"]
-            encryption = f"enabled ({algo})"
-        except Exception:
-            encryption = "disabled"
+        # ---------------- STORE RAW DATA ONLY ----------------
+        buckets.append({
+            "bucket_name": bucket_name,
+            "public_access": public_access
+        })
 
-        # ---------------- RULE ENGINE ----------------
-        bucket_findings = evaluate_finding(
-            "s3",
-            bucket_name,
-            {
-                "public_access": public_access,
-                "encryption": encryption
-            }
+    # ---------------- RULE ENGINE ----------------
+    findings = []
+
+    for b in buckets:
+        findings.extend(
+            evaluate_finding(
+                "s3",
+                b["bucket_name"],
+                {
+                    "public_access": b["public_access"]
+                }
+            )
         )
-
-        findings.extend(bucket_findings)
 
     return {
         "status": "success",
-        "buckets": len(s3_response.get("Buckets", [])),
+        "buckets": len(buckets),
+        "data": buckets,
         "findings": findings
     }
 

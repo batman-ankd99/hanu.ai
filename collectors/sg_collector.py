@@ -6,33 +6,35 @@ def collect_sg_data():
     ONLY fetch AWS Security Groups.
     NO rule engine.
     NO DB writes.
+    PURE data collector.
     """
 
     ec2_client = boto3.client("ec2")
-    sg_response = ec2_client.describe_security_groups()
+
+    response = ec2_client.describe_security_groups()
 
     sg_data = []
 
-    for sg in sg_response.get("SecurityGroups", []):
+    for sg in response.get("SecurityGroups", []):
 
         group_id = sg.get("GroupId")
 
         inbound_rules = []
         outbound_rules = []
 
-        # ---------------- INBOUND ----------------
+        # ---------------- INBOUND RULES ----------------
         for entry in sg.get("IpPermissions", []):
             for cidr in entry.get("IpRanges", []):
-                inbound_rules.append({
-                    "cidr": cidr.get("CidrIp")
-                })
+                cidr_value = cidr.get("CidrIp")
+                if cidr_value:
+                    inbound_rules.append({"cidr": cidr_value})
 
-        # ---------------- OUTBOUND ----------------
+        # ---------------- OUTBOUND RULES ----------------
         for entry in sg.get("IpPermissionsEgress", []):
             for cidr in entry.get("IpRanges", []):
-                outbound_rules.append({
-                    "cidr": cidr.get("CidrIp")
-                })
+                cidr_value = cidr.get("CidrIp")
+                if cidr_value:
+                    outbound_rules.append({"cidr": cidr_value})
 
         sg_data.append({
             "group_id": group_id,

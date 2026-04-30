@@ -9,21 +9,19 @@ from core.rule_engine import evaluate_all
 from core.rule_engine import save_finding_to_db
 
 from db import db
-
 import time
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
 
-# ---------------- MAIN PIPELINE ----------------
 def collect_all():
 
     try:
         start = time.time()
         logging.info("Starting data collection...")
 
-        # ---------------- COLLECT AWS DATA ----------------
+        # ---------------- COLLECT ----------------
         ec2 = collect_ec2_data()
         sg = collect_sg_data()
         s3 = collect_s3_data()
@@ -31,7 +29,7 @@ def collect_all():
         iam_stmt = collect_iampolicystatements_data()
         iam_mfa = collect_iam_mfa_data()
 
-        # ---------------- RUN RULE ENGINE ----------------
+        # ---------------- RULE ENGINE ----------------
         all_findings = evaluate_all(
             ec2_data=ec2,
             sg_data=sg,
@@ -41,28 +39,26 @@ def collect_all():
 
         logging.info(f"TOTAL FINDINGS GENERATED: {len(all_findings)}")
 
-        # ---------------- SAVE FINDINGS ----------------
+        # ---------------- DB WRITE (ONLY HERE) ----------------
         for f in all_findings:
             save_finding_to_db(f)
 
         db.session.commit()
-
-        results = {
-            "ec2": ec2,
-            "sg": sg,
-            "s3": s3,
-            "iampolicy": iam,
-            "iampolicy_statements": iam_stmt,
-            "iam_mfa": iam_mfa
-        }
 
         duration = round(time.time() - start, 2)
         logging.info(f"Collection complete in {duration}s")
 
         return {
             "status": "success",
-            "details": results,
-            "findings_count": len(all_findings)
+            "findings_count": len(all_findings),
+            "details": {
+                "ec2": ec2,
+                "sg": sg,
+                "s3": s3,
+                "iampolicy": iam,
+                "iampolicy_statements": iam_stmt,
+                "iam_mfa": iam_mfa
+            }
         }
 
     except Exception as e:
