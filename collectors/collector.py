@@ -5,54 +5,15 @@ from collectors.iampolicy_collector import collect_iampolicy_data
 from collectors.iampolicystatements_collector import collect_iampolicystatements_data
 from collectors.iam_mfa_collector import collect_iam_mfa_data
 
+from core.rule_engine import evaluate_all
+from core.rule_engine import save_finding_to_db
+
 from db import db
-from models import Finding
 
 import time
 import logging
 
 logging.basicConfig(level=logging.INFO)
-
-
-# ---------------- SAFE FINDINGS EXTRACTOR ----------------
-def extract_findings(obj):
-    """
-    Handles multiple possible response formats safely
-    """
-    if not obj:
-        return []
-
-    if isinstance(obj, list):
-        return obj
-
-    if isinstance(obj, dict):
-        return (
-            obj.get("data")
-            or obj.get("findings")
-            or obj.get("results")
-            or []
-        )
-
-    return []
-
-
-# ---------------- SAVE FINDINGS ----------------
-def save_findings(findings):
-
-    for f in findings:
-
-        record = Finding(
-            service=f.get("service"),
-            resource_type=f.get("resource_type"),
-            resource_id=f.get("resource_id"),
-            finding=f.get("finding"),
-            severity=f.get("severity"),
-            status=f.get("status", "open")
-        )
-
-        db.session.add(record)
-
-    db.session.commit()
 
 
 # ---------------- MAIN PIPELINE ----------------
@@ -62,7 +23,7 @@ def collect_all():
         start = time.time()
         logging.info("Starting data collection...")
 
-        # ---------------- COLLECTORS ----------------
+        # ---------------- COLLECT AWS DATA ----------------
         ec2 = collect_ec2_data()
         sg = collect_sg_data()
         s3 = collect_s3_data()
@@ -70,24 +31,21 @@ def collect_all():
         iam_stmt = collect_iampolicystatements_data()
         iam_mfa = collect_iam_mfa_data()
 
-        # ---------------- DEBUG (VERY IMPORTANT) ----------------
-        logging.info(f"SG OUTPUT: {sg}")
-        logging.info(f"S3 OUTPUT: {s3}")
+        # ---------------- RUN RULE ENGINE ----------------
+        all_findings = evaluate_all(
+            ec2_data=ec2,
+            sg_data=sg,
+            s3_data=s3,
+            iam_data=iam
+        )
 
-        # ---------------- FINDINGS ----------------
-        all_findings = []
+        logging.info(f"TOTAL FINDINGS GENERATED: {len(all_findings)}")
 
-        sg_findings = extract_findings(sg)
-        s3_findings = extract_findings(s3)
+        # ---------------- SAVE FINDINGS ----------------
+        for f in all_findings:
+            save_finding_to_db(f)
 
-        all_findings.extend(sg_findings)
-        all_findings.extend(s3_findings)
-
-        logging.info(f"TOTAL FINDINGS TO SAVE: {len(all_findings)}")
-
-        # ---------------- SAVE ----------------
-        if all_findings:
-            save_findings(all_findings)
+        db.session.commit()
 
         results = {
             "ec2": ec2,
@@ -110,8 +68,11 @@ def collect_all():
     except Exception as e:
         logging.error(f"Collector failed: {e}")
         db.session.rollback()
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 if __name__ == "__main__":
-    collect_all()
+    print(collect_all())
