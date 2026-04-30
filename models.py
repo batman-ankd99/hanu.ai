@@ -1,9 +1,7 @@
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
+from db import db
 
 class Finding(db.Model):
-    __tablename__ = "finding"
+    __tablename__ = "findings"   # ✅ MUST MATCH REAL DB TABLE
 
     id = db.Column(db.Integer, primary_key=True)
 

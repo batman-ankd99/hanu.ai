@@ -1,5 +1,6 @@
 from datetime import datetime
-from app import db, Finding
+from db import db
+from models import Finding
 
 
 # -------------------------

@@ -16,6 +16,7 @@ from analyzers import analytics_layer_sg
 from analyzers import analytics_layer_iam_useraccesskey
 
 from core.rule_engine import evaluate_all
+from db import db
 
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
@@ -24,8 +25,7 @@ CORS(app)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://cloud_user:StrongPassword123@127.0.0.1/cloud_audit"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-db = SQLAlchemy(app)
-
+db.init_app(app)
 
 # ---------------- MODEL ----------------
 class Finding(db.Model):
