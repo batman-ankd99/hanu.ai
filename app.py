@@ -30,8 +30,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-
-# ---------------- DB INIT ----------------
 with app.app_context():
     db.create_all()
 
@@ -104,28 +102,49 @@ def analyzer_iam_useraccesskey():
     return jsonify(analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey())
 
 
+# ---------------- SAVE FINDINGS ----------------
+def save_findings(findings):
+    for f in findings:
+        record = Finding(
+            service=f["service"],
+            resource_type=f["resource_type"],
+            resource_id=f["resource_id"],
+            finding=f["finding"],
+            severity=f["severity"],
+            status=f.get("status", "open")
+        )
+        db.session.add(record)
+
+    db.session.commit()
+
+
 # ---------------- SCAN ----------------
 @app.route('/scan', methods=['POST'])
 def run_scan():
     try:
-        # 🔥 STEP 1: CLEAN OLD FINDINGS
-        db.session.execute("DELETE FROM findings")
+        # STEP 1: CLEAN OLD FINDINGS
+        db.session.execute(text("DELETE FROM findings"))
         db.session.commit()
 
-        # 🔥 STEP 2: COLLECT
+        # STEP 2: COLLECT DATA
         collected = collector.collect_all()
 
-        # 🔥 STEP 3: RULE ENGINE
-        evaluate_all(
+        # STEP 3: RUN RULE ENGINE (IMPORTANT FIX)
+        findings = evaluate_all(
             ec2_data=collected.get("ec2"),
             sg_data=collected.get("sg"),
             s3_data=collected.get("s3"),
             iam_data=collected.get("iampolicy")
         )
 
+        # STEP 4: SAVE FINDINGS TO DB (FIXED)
+        if findings:
+            save_findings(findings)
+
         return jsonify({
             "status": "success",
-            "message": "Scan completed successfully"
+            "message": "Scan completed successfully",
+            "findings_count": len(findings) if findings else 0
         })
 
     except Exception as e:
@@ -134,6 +153,7 @@ def run_scan():
             "status": "error",
             "message": str(e)
         }), 500
+
 
 # ---------------- RISK SUMMARY ----------------
 @app.route('/risk-summary', methods=['GET'])
@@ -174,7 +194,6 @@ def get_findings():
     """)).fetchall()
 
     findings_list = []
-
     severity_count = {
         "CRITICAL": 0,
         "HIGH": 0,
