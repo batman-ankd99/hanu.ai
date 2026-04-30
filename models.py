@@ -1,7 +1,8 @@
 from db import db
 
 class Finding(db.Model):
-    __tablename__ = "findings"   # ✅ MUST MATCH REAL DB TABLE
+    __tablename__ = "findings"
+    __table_args__ = {"extend_existing": True}  # ✅ IMPORTANT FIX
 
     id = db.Column(db.Integer, primary_key=True)
 

@@ -1,6 +1,5 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 
 from collectors import collector
@@ -16,7 +15,10 @@ from analyzers import analytics_layer_sg
 from analyzers import analytics_layer_iam_useraccesskey
 
 from core.rule_engine import evaluate_all
+
 from db import db
+from models import Finding   # ✅ IMPORTANT: ONLY HERE (no model in app.py)
+
 
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
@@ -27,23 +29,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# ---------------- MODEL ----------------
-class Finding(db.Model):
-    __tablename__ = "findings"
 
-    id = db.Column(db.Integer, primary_key=True)
-
-    service = db.Column(db.String(100))
-    resource_type = db.Column(db.String(100))
-    resource_id = db.Column(db.String(200))
-
-    finding = db.Column(db.Text)
-    severity = db.Column(db.String(50))
-
-    status = db.Column(db.String(20), default="open")
-
-
-# create tables
+# ---------------- DB INIT ----------------
 with app.app_context():
     db.create_all()
 
@@ -65,21 +52,26 @@ def run_collector():
 def run_ec2():
     return jsonify(ec2_collector.collect_ec2_data())
 
+
 @app.route('/collect/sg')
 def run_sg():
     return jsonify(sg_collector.collect_sg_data())
+
 
 @app.route('/collect/s3')
 def run_s3():
     return jsonify(s3_collector.collect_s3_data())
 
+
 @app.route('/collect/iampolicy')
 def run_iampolicy():
     return jsonify(iampolicy_collector.collect_iampolicy_data())
 
+
 @app.route('/collect/iampolicystatements')
 def run_iampolicystatements():
     return jsonify(iampolicystatements_collector.collect_iampolicystatements_data())
+
 
 @app.route('/collect/vpcflowlog')
 def run_vpcflow():
@@ -101,16 +93,18 @@ def run_vpcflow():
 def analyzer_sg():
     return jsonify(analytics_layer_sg.analytics_sg())
 
+
 @app.route('/analyzer/iam')
 def analyzer_iam():
     return jsonify(analytics_layer_iam.analytics_iam())
+
 
 @app.route('/analyzer/iam_useraccesskey')
 def analyzer_iam_useraccesskey():
     return jsonify(analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey())
 
 
-# ---------------- SCAN (FIXED) ----------------
+# ---------------- SCAN ----------------
 @app.route('/scan', methods=['POST'])
 def run_scan():
     try:
@@ -129,7 +123,7 @@ def run_scan():
         }), 500
 
 
-# ---------------- RISK SUMMARY (FIXED) ----------------
+# ---------------- RISK SUMMARY ----------------
 @app.route('/risk-summary', methods=['GET'])
 def risk_summary():
 
@@ -157,7 +151,7 @@ def risk_summary():
     })
 
 
-# ---------------- FINDINGS API ----------------
+# ---------------- FINDINGS ----------------
 @app.route('/findings', methods=['GET'])
 def get_findings():
 
