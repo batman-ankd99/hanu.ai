@@ -201,6 +201,50 @@ def export_findings_csv():
         }
     )
 
+#------PCI DSS compliance ----------
+
+@app.route('/pci-summary', methods=['GET'])
+def pci_summary():
+
+    results = db.session.execute(text("""
+        SELECT severity, COUNT(*) as count
+        FROM findings
+        GROUP BY severity
+    """)).fetchall()
+
+    summary = {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+    }
+
+    for row in results:
+        severity = (row.severity or "").upper()
+        if severity in summary:
+            summary[severity] = row.count
+
+    # ---------------- SIMPLE PCI SCORE MODEL ----------------
+    pci_score = 100
+    pci_score -= summary["CRITICAL"] * 15
+    pci_score -= summary["HIGH"] * 8
+    pci_score -= summary["MEDIUM"] * 3
+
+    pci_score = max(pci_score, 0)
+
+    compliance_status = (
+        "COMPLIANT" if pci_score >= 90 else
+        "PARTIAL" if pci_score >= 70 else
+        "NON-COMPLIANT"
+    )
+
+    return jsonify({
+        "status": "success",
+        "pci_score": pci_score,
+        "compliance_status": compliance_status,
+        "breakdown": summary
+    })
+
 # ---------------- RISK SUMMARY ----------------
 @app.route('/risk-summary', methods=['GET'])
 def risk_summary():
