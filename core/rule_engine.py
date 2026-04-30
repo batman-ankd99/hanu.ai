@@ -2,6 +2,7 @@ from datetime import datetime
 from db import db
 from models import Finding
 
+
 # ---------------- RULES ----------------
 RULES = [
     {
@@ -27,11 +28,13 @@ RULES = [
     }
 ]
 
+
 # ---------------- FINDING FORMAT ----------------
 def make_finding(rule, service, resource_id):
+
     return {
         "service": service,
-        "resource_type": service,
+        "resource_type": rule["resource_type"],   # FIXED
         "resource_id": resource_id,
         "finding": rule["description"],
         "severity": rule["severity"],
@@ -42,10 +45,9 @@ def make_finding(rule, service, resource_id):
     }
 
 
-# =========================================================
-# 1. REAL-TIME EVALUATION (USED BY COLLECTORS)
-# =========================================================
+# ---------------- REAL-TIME ENGINE (USED BY COLLECTORS) ----------------
 def evaluate_finding(resource_type, resource_id, attributes):
+
     findings = []
 
     for rule in RULES:
@@ -73,34 +75,36 @@ def evaluate_finding(resource_type, resource_id, attributes):
     return findings
 
 
-# =========================================================
-# 2. DB SAVE (DEDUP SAFE)
-# =========================================================
+# ---------------- SAVE TO DB (FIXED - NO BLANK ROWS) ----------------
 def save_finding_to_db(f):
 
+    if not f:
+        return
+
+    if not f.get("finding"):
+        return   # IMPORTANT: prevents blank rows
+
     existing = Finding.query.filter_by(
-        service=f["service"],
-        resource_type=f["resource_type"],
-        resource_id=f["resource_id"],
-        finding=f["finding"]
+        service=f.get("service"),
+        resource_type=f.get("resource_type"),
+        resource_id=f.get("resource_id"),
+        finding=f.get("finding")
     ).first()
 
     if existing:
         return
 
     db.session.add(Finding(
-        service=f["service"],
-        resource_type=f["resource_type"],
-        resource_id=f["resource_id"],
-        finding=f["finding"],
-        severity=f["severity"],
-        status=f["status"]
+        service=f.get("service"),
+        resource_type=f.get("resource_type"),
+        resource_id=f.get("resource_id"),
+        finding=f.get("finding"),
+        severity=f.get("severity"),
+        status=f.get("status", "open")
     ))
 
 
-# =========================================================
-# 3. BATCH SCAN ENGINE (/scan)
-# =========================================================
+# ---------------- BATCH SCAN ENGINE (/scan) ----------------
 def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
 
     all_findings = []
