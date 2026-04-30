@@ -32,12 +32,12 @@ RULES = [
 
 
 # -------------------------
-# FINDING BUILDER
+# FINDING BUILDER (FIXED)
 # -------------------------
 def make_finding(rule, service, resource_id):
     return {
         "service": service,
-        "resource_type": service,
+        "resource_type": rule["resource_type"],
         "resource_id": resource_id,
         "finding": rule["description"],
         "severity": rule["severity"],
@@ -49,11 +49,43 @@ def make_finding(rule, service, resource_id):
 
 
 # -------------------------
-# SAVE TO DB (FIXED)
+# RULE EVALUATION (FIXED)
+# -------------------------
+def evaluate_finding(resource_type, resource_id, attributes):
+    findings = []
+
+    for rule in RULES:
+
+        if rule["resource_type"] != resource_type:
+            continue
+
+        # ---------------- S3 ----------------
+        if rule["id"] == "S3_PUBLIC_BUCKET":
+            if attributes.get("public_access") == "public":
+                findings.append(make_finding(rule, "s3", resource_id))
+
+        # ---------------- SG ----------------
+        if rule["id"] == "SG_OPEN_WORLD":
+            inbound = attributes.get("inbound_rules", [])
+
+            for r in inbound:
+                if r.get("cidr") == "0.0.0.0/0":
+                    findings.append(make_finding(rule, "sg", resource_id))
+                    break
+
+        # ---------------- IAM ----------------
+        if rule["id"] == "IAM_STAR_ACTION":
+            if attributes.get("is_action_star") is True:
+                findings.append(make_finding(rule, "iam_policy", resource_id))
+
+    return findings
+
+
+# -------------------------
+# SAVE TO DB
 # -------------------------
 def save_finding_to_db(f):
 
-    # SAFE DEDUP (ONLY USE EXISTING COLUMNS)
     existing = Finding.query.filter_by(
         service=f["service"],
         resource_type=f["resource_type"],
@@ -77,38 +109,6 @@ def save_finding_to_db(f):
 
 
 # -------------------------
-# RULE EVALUATION
-# -------------------------
-def evaluate_finding(resource_type, resource_id, attributes):
-    findings = []
-
-    for rule in RULES:
-
-        if rule["resource_type"] != resource_type:
-            continue
-
-        # ---- S3 RULE ----
-        if rule["id"] == "S3_PUBLIC_BUCKET":
-            if attributes.get("public_access") == "public":
-                findings.append(make_finding(rule, resource_type, resource_id))
-
-        # ---- SG RULE ----
-        if rule["id"] == "SG_OPEN_WORLD":
-            inbound = attributes.get("inbound_rules", [])
-            for r in inbound:
-                if r.get("cidr") == "0.0.0.0/0":
-                    findings.append(make_finding(rule, resource_type, resource_id))
-                    break
-
-        # ---- IAM RULE ----
-        if rule["id"] == "IAM_STAR_ACTION":
-            if attributes.get("is_action_star") is True:
-                findings.append(make_finding(rule, resource_type, resource_id))
-
-    return findings
-
-
-# -------------------------
 # BATCH ENGINE (FIXED)
 # -------------------------
 def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
@@ -117,38 +117,44 @@ def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
 
     # ---------------- S3 ----------------
     if s3_data:
-        for bucket in s3_data.get("records", []):
+        for bucket in s3_data.get("findings", []):
             all_findings.extend(
                 evaluate_finding(
                     "s3",
-                    bucket.get("bucket_name"),
-                    {"public_access": bucket.get("public_access")}
+                    bucket.get("resource_id"),
+                    {
+                        "public_access": bucket.get("public_access")
+                    }
                 )
             )
 
     # ---------------- SG ----------------
     if sg_data:
-        for sg in sg_data.get("records", []):
+        for sg in sg_data.get("findings", []):
             all_findings.extend(
                 evaluate_finding(
                     "sg",
-                    sg.get("group_id"),
-                    {"inbound_rules": sg.get("inbound_rules", [])}
+                    sg.get("resource_id"),
+                    {
+                        "inbound_rules": sg.get("inbound_rules", [])
+                    }
                 )
             )
 
     # ---------------- IAM ----------------
     if iam_data:
-        for iam in iam_data.get("records", []):
+        for iam in iam_data.get("iam_data", []) if isinstance(iam_data, dict) else []:
             all_findings.extend(
                 evaluate_finding(
                     "iam_policy",
                     iam.get("policy_arn"),
-                    {"is_action_star": iam.get("is_action_star", False)}
+                    {
+                        "is_action_star": iam.get("is_action_star", False)
+                    }
                 )
             )
 
-    # ---------------- DB INSERT (SAFE) ----------------
+    # ---------------- DB WRITE ----------------
     for f in all_findings:
         save_finding_to_db(f)
 
