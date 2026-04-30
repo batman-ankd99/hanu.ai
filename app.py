@@ -108,8 +108,20 @@ def analyzer_iam_useraccesskey():
 @app.route('/scan', methods=['POST'])
 def run_scan():
     try:
-        collector.collect_all()
-        evaluate_all()
+        # 🔥 STEP 1: CLEAN OLD FINDINGS
+        db.session.execute("DELETE FROM findings")
+        db.session.commit()
+
+        # 🔥 STEP 2: COLLECT
+        collected = collector.collect_all()
+
+        # 🔥 STEP 3: RULE ENGINE
+        evaluate_all(
+            ec2_data=collected.get("ec2"),
+            sg_data=collected.get("sg"),
+            s3_data=collected.get("s3"),
+            iam_data=collected.get("iampolicy")
+        )
 
         return jsonify({
             "status": "success",
@@ -117,11 +129,11 @@ def run_scan():
         })
 
     except Exception as e:
+        db.session.rollback()
         return jsonify({
             "status": "error",
             "message": str(e)
         }), 500
-
 
 # ---------------- RISK SUMMARY ----------------
 @app.route('/risk-summary', methods=['GET'])
