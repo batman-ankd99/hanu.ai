@@ -14,21 +14,39 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
+# ---------------- SAFE FINDINGS EXTRACTOR ----------------
+def extract_findings(obj):
+    """
+    Handles multiple possible response formats safely
+    """
+    if not obj:
+        return []
+
+    if isinstance(obj, list):
+        return obj
+
+    if isinstance(obj, dict):
+        return (
+            obj.get("data")
+            or obj.get("findings")
+            or obj.get("results")
+            or []
+        )
+
+    return []
+
+
 # ---------------- SAVE FINDINGS ----------------
 def save_findings(findings):
-    """
-    Stores SG + S3 findings in DB (SQLAlchemy).
-    Dedup should be handled via DB constraint OR here.
-    """
 
     for f in findings:
 
         record = Finding(
-            service=f["service"],
-            resource_type=f["resource_type"],
-            resource_id=f["resource_id"],
-            finding=f["finding"],
-            severity=f["severity"],
+            service=f.get("service"),
+            resource_type=f.get("resource_type"),
+            resource_id=f.get("resource_id"),
+            finding=f.get("finding"),
+            severity=f.get("severity"),
             status=f.get("status", "open")
         )
 
@@ -52,17 +70,22 @@ def collect_all():
         iam_stmt = collect_iampolicystatements_data()
         iam_mfa = collect_iam_mfa_data()
 
-        # ---------------- FINDINGS PIPELINE ----------------
+        # ---------------- DEBUG (VERY IMPORTANT) ----------------
+        logging.info(f"SG OUTPUT: {sg}")
+        logging.info(f"S3 OUTPUT: {s3}")
+
+        # ---------------- FINDINGS ----------------
         all_findings = []
 
-        # only rule-engine based outputs
-        if sg.get("data"):
-            all_findings.extend(sg["data"])
+        sg_findings = extract_findings(sg)
+        s3_findings = extract_findings(s3)
 
-        if s3.get("data"):
-            all_findings.extend(s3["data"])
+        all_findings.extend(sg_findings)
+        all_findings.extend(s3_findings)
 
-        # ---------------- SAVE TO DB ----------------
+        logging.info(f"TOTAL FINDINGS TO SAVE: {len(all_findings)}")
+
+        # ---------------- SAVE ----------------
         if all_findings:
             save_findings(all_findings)
 
