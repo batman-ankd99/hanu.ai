@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from flask import Flask, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
@@ -17,7 +18,7 @@ from analyzers import analytics_layer_iam_useraccesskey
 from core.rule_engine import evaluate_all
 
 from db import db
-from models import Finding   # ✅ IMPORTANT: ONLY HERE (no model in app.py)
+from models import Finding
 
 
 # ---------------- APP INIT ----------------
@@ -44,8 +45,7 @@ def home():
 # ---------------- COLLECTORS ----------------
 @app.route('/collect', methods=['GET'])
 def run_collector():
-    results = collector.collect_all()
-    return jsonify(results)
+    return jsonify(collector.collect_all())
 
 
 @app.route('/collect/ec2')
@@ -127,11 +127,11 @@ def run_scan():
 @app.route('/risk-summary', methods=['GET'])
 def risk_summary():
 
-    results = db.session.execute("""
+    results = db.session.execute(text("""
         SELECT severity, COUNT(*) as count
         FROM findings
         GROUP BY severity
-    """).fetchall()
+    """)).fetchall()
 
     summary = {
         "CRITICAL": 0,
@@ -155,11 +155,11 @@ def risk_summary():
 @app.route('/findings', methods=['GET'])
 def get_findings():
 
-    results = db.session.execute("""
+    results = db.session.execute(text("""
         SELECT id, service, resource_type, resource_id, finding, severity, status
         FROM findings
         ORDER BY id DESC
-    """).fetchall()
+    """)).fetchall()
 
     findings_list = []
 
