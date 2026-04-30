@@ -17,7 +17,6 @@ from analyzers import analytics_layer_iam_useraccesskey
 
 from core.rule_engine import evaluate_all
 
-
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
 CORS(app)
@@ -28,9 +27,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
-# ---------------- MODEL (FIXED) ----------------
+# ---------------- MODEL ----------------
 class Finding(db.Model):
-    __tablename__ = "findings"   # ✅ FIX: was "finding"
+    __tablename__ = "findings"
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -44,7 +43,7 @@ class Finding(db.Model):
     status = db.Column(db.String(20), default="open")
 
 
-# create tables (safe now)
+# create tables
 with app.app_context():
     db.create_all()
 
@@ -52,17 +51,16 @@ with app.app_context():
 # ---------------- HOME ----------------
 @app.route('/')
 def home():
-    return "AWS Collector API is running"
+    return "AWS Cloud Audit API is running"
 
 
-# ---------------- FULL COLLECTION ----------------
+# ---------------- COLLECTORS ----------------
 @app.route('/collect', methods=['GET'])
 def run_collector():
     results = collector.collect_all()
     return jsonify(results)
 
 
-# ---------------- INDIVIDUAL COLLECTORS ----------------
 @app.route('/collect/ec2')
 def run_ec2():
     return jsonify(ec2_collector.collect_ec2_data())
@@ -112,13 +110,61 @@ def analyzer_iam_useraccesskey():
     return jsonify(analytics_layer_iam_useraccesskey.analytics_iam_useraccesskey())
 
 
-# ---------------- FINDINGS API (FIXED CORE ISSUE) ----------------
+# ---------------- SCAN (FIXED) ----------------
+@app.route('/scan', methods=['POST'])
+def run_scan():
+    try:
+        collector.collect_all()
+        evaluate_all()
+
+        return jsonify({
+            "status": "success",
+            "message": "Scan completed successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+# ---------------- RISK SUMMARY (FIXED) ----------------
+@app.route('/risk-summary', methods=['GET'])
+def risk_summary():
+
+    results = db.session.execute("""
+        SELECT severity, COUNT(*) as count
+        FROM findings
+        GROUP BY severity
+    """).fetchall()
+
+    summary = {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0
+    }
+
+    for row in results:
+        severity = (row.severity or "").upper()
+        if severity in summary:
+            summary[severity] = row.count
+
+    return jsonify({
+        "status": "success",
+        "risk_summary": summary
+    })
+
+
+# ---------------- FINDINGS API ----------------
 @app.route('/findings', methods=['GET'])
 def get_findings():
 
     results = db.session.execute("""
         SELECT id, service, resource_type, resource_id, finding, severity, status
         FROM findings
+        ORDER BY id DESC
     """).fetchall()
 
     findings_list = []
@@ -131,6 +177,7 @@ def get_findings():
     }
 
     for row in results:
+
         severity = (row.severity or "").upper()
 
         findings_list.append({
@@ -152,6 +199,8 @@ def get_findings():
         "severity_breakdown": severity_count,
         "findings": findings_list
     })
+
+
 # ---------------- RUN APP ----------------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
