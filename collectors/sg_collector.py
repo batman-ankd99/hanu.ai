@@ -4,68 +4,53 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 import json
-#rule engine import
+
 from core.rule_engine import evaluate_finding
+from db_utils import get_db_connection
 
 
 def collect_sg_data():
-    """Collect AWS Security Group details along with protocol + ports + CIDRs."""
+    """Collect AWS Security Group details and store findings properly."""
 
     load_dotenv(".env.prod")
-
-    db_host = os.getenv("DB_HOST")
-    db_name = os.getenv("DB_NAME")
-    db_user = os.getenv("DB_USER")
-    db_pass = os.getenv("DB_PASS")
 
     ec2_client = boto3.client("ec2")
     sg_response = ec2_client.describe_security_groups()
 
     sgs = []
     sg_live_list = []
-
-    # findings list
     findings = []
 
-    for sg in sg_response['SecurityGroups']:
+    for sg in sg_response.get("SecurityGroups", []):
 
-        group_id = sg['GroupId']
-        group_name = sg['GroupName']
-        description = sg.get('Description', "")
-        scan_time = datetime.now()
+        group_id = sg["GroupId"]
+        group_name = sg["GroupName"]
+        description = sg.get("Description", "")
+        scan_time = datetime.utcnow()
 
-        ################## outbound rules #################
-        outbound_rules = []
-        for entry in sg.get('IpPermissionsEgress', []):
-            protocol = entry.get("IpProtocol", "")
-            from_port = entry.get("FromPort")
-            to_port = entry.get("ToPort")
-
-            for cidr_block in entry.get("IpRanges", []):
-                outbound_rules.append({
-                    "cidr": cidr_block["CidrIp"],
-                    "protocol": protocol,
-                    "from_port": from_port,
-                    "to_port": to_port
-                })
-
-        ################## inbound rules #################
         inbound_rules = []
-        for entry in sg.get('IpPermissions', []):
+        outbound_rules = []
 
-            protocol = entry.get("IpProtocol", "")
-            from_port = entry.get("FromPort")
-            to_port = entry.get("ToPort")
-
-            for cidr_block in entry.get("IpRanges", []):
+        # inbound
+        for entry in sg.get("IpPermissions", []):
+            for cidr in entry.get("IpRanges", []):
                 inbound_rules.append({
-                    "cidr": cidr_block["CidrIp"],
-                    "protocol": protocol,
-                    "from_port": from_port,
-                    "to_port": to_port
+                    "cidr": cidr["CidrIp"],
+                    "protocol": entry.get("IpProtocol"),
+                    "from_port": entry.get("FromPort"),
+                    "to_port": entry.get("ToPort")
                 })
 
-        # add one row for this SG
+        # outbound
+        for entry in sg.get("IpPermissionsEgress", []):
+            for cidr in entry.get("IpRanges", []):
+                outbound_rules.append({
+                    "cidr": cidr["CidrIp"],
+                    "protocol": entry.get("IpProtocol"),
+                    "from_port": entry.get("FromPort"),
+                    "to_port": entry.get("ToPort")
+                })
+
         sgs.append((
             group_id,
             group_name,
@@ -77,35 +62,28 @@ def collect_sg_data():
 
         sg_live_list.append(group_id)
 
-        # 🔥 step 6 - rule engine call (minimal addition)
-        sg_attributes = {
-            "inbound_rules": inbound_rules
-        }
-
+        # rule engine
         sg_findings = evaluate_finding(
             "sg",
             group_id,
-            sg_attributes
+            {
+                "inbound_rules": inbound_rules,
+                "outbound_rules": outbound_rules
+            }
         )
 
         findings.extend(sg_findings)
 
-    # db connection
     try:
-        conn = psycopg2.connect(
-            host=db_host,
-            database=db_name,
-            user=db_user,
-            password=db_pass
-        )
+        conn = get_db_connection()
         cursor = conn.cursor()
-        print("Database connected")
 
-    except Exception as e:
-        print("Database connection failed:", e)
-        return {"status": "error", "message": str(e)}
+        print("✅ DB connected")
 
-    insert_query_sg = """
+        # -------------------------
+        # SECURITY GROUP TABLE
+        # -------------------------
+        insert_sg = """
         INSERT INTO security_groups
         (group_id, group_name, description, inbound_rules, outbound_rules, scan_time)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -116,52 +94,61 @@ def collect_sg_data():
             inbound_rules = EXCLUDED.inbound_rules,
             outbound_rules = EXCLUDED.outbound_rules,
             scan_time = EXCLUDED.scan_time;
-    """
+        """
 
-    for sg_info in sgs:
-        cursor.execute(insert_query_sg, sg_info)
+        for row in sgs:
+            cursor.execute(insert_sg, row)
 
-    # Delete old sg entry
-    sg_current = tuple(sg_live_list)
-    if len(sg_current) == 1:
-        sg_current = (sg_current[0],)
+        # cleanup old SGs
+        if sg_live_list:
+            cursor.execute("""
+                DELETE FROM security_groups
+                WHERE group_id NOT IN %s
+            """, (tuple(sg_live_list),))
+        else:
+            cursor.execute("DELETE FROM security_groups;")
 
-    delete_query = """
-        DELETE FROM security_groups
-        WHERE group_id NOT IN %s;
-    """
-    cursor.execute(delete_query, (sg_current,))
+        # -------------------------
+        # FINDINGS INSERT (FIXED)
+        # -------------------------
+        insert_finding = """
+        INSERT INTO findings (
+            dedup_key,
+            service,
+            resource_type,
+            resource_id,
+            finding,
+            severity,
+            status,
+            recommendation,
+            created_at,
+            updated_at
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now(),now())
+        """
 
-    #  findings table insert (minimal addition)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS findings (
-        id SERIAL PRIMARY KEY,
-        rule_id TEXT,
-        severity TEXT,
-        description TEXT,
-        resource_id TEXT,
-        detected_at TIMESTAMP
-    )
-    """)
+        for f in findings:
+            cursor.execute(insert_finding, (
+                f["dedup_key"],
+                f["service"],
+                f["resource_type"],
+                f["resource_id"],
+                f["finding"],
+                f["severity"],
+                f.get("status", "open"),
+                f.get("recommendation", "")
+            ))
 
-    insert_finding = """
-    INSERT INTO findings
-    (rule_id, severity, description, resource_id, detected_at)
-    VALUES (%s, %s, %s, %s, %s)
-    """
+        conn.commit()
 
-    for f in findings:
-        cursor.execute(insert_finding, (
-            f["rule_id"],
-            f["severity"],
-            f["description"],
-            f["resource_id"],
-            f["detected_at"]
-        ))
+        print("✅ SG + findings inserted successfully")
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    except Exception as e:
+        print("❌ DB error:", e)
+
+    finally:
+        cursor.close()
+        conn.close()
 
     return {
         "status": "success",
@@ -170,6 +157,5 @@ def collect_sg_data():
     }
 
 
-# Allow running directly or importing in collector.py file
 if __name__ == "__main__":
     collect_sg_data()

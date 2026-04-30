@@ -5,144 +5,141 @@ import os
 import json
 import psycopg2
 from psycopg2.extras import Json
+
 from db_utils import get_db_connection
+
 
 def collect_iampolicystatements_data():
     """Collect AWS IAM Policy Statements details and store them in PostgreSQL."""
+
     load_dotenv(".env.prod")
 
-    # Postgres DB connection details
-    db_host = os.getenv("DB_HOST")
-    db_name = os.getenv("DB_NAME")
-    db_user = os.getenv("DB_USER")
-    db_pass = os.getenv("DB_PASS")
+    iam = boto3.client("iam")
 
-    iampolicy = boto3.client('iam')
-    response_iampolicy = iampolicy.list_policies(Scope='Local') #will fetch only customer managed, aws managed we are not getting since only a check for FULL policy aws we will put a check for security.
+    response = iam.list_policies(Scope="Local")
+    policy_list_allinfo = response.get("Policies", [])
 
-    # SQl Table fields -> id, policy_arn, sid, effect, is_principal_star, actions, resources, conditions, raw_Statement, scan time
-
-    policy_st_allinfo = response_iampolicy['Policies'] #this is policy arn of all policies managed by customer
-
-    policy_list_local = [] #arns of all policies to be appended
-
-    for policy in policy_st_allinfo:
-        policy_list_local.append(policy['Arn'])
-
-    #print(policy_list_local)
-
-    #now need some logic to fetch details of policy complete since we have policy arn
+    policy_arns = [p["Arn"] for p in policy_list_allinfo]
 
     try:
-        conn = psycopg2.connect(
-            host=db_host,
-            database=db_name,
-            user=db_user,
-            password=db_pass
-        )
+        conn = get_db_connection()
         cur = conn.cursor()
 
     except Exception as e:
         print("❌ Database connection failed:", e)
         return {"status": "db_failed"}
 
-    for policy_arn in policy_list_local:
-        policy_detail = iampolicy.get_policy(PolicyArn=policy_arn)
-        policy_name = policy_detail['Policy']['PolicyName']
-
-        policy_version = iampolicy.get_policy_version(PolicyArn = policy_arn, VersionId = policy_detail['Policy']['DefaultVersionId'])
-
-#        print(json.dumps(policy_version['PolicyVersion']['Document']['Statement'], indent=4))
-
-        statements = policy_version['PolicyVersion']['Document']['Statement']
-        if not isinstance(statements, list):
-            statements = [statements]  # handle single statement policies
-
-
-
-        for st in statements:
-            sid = st.get('Sid')
-
-            if not sid:
-                sid = f"auto-{policy_detail['Policy']['DefaultVersionId']}-{statements.index(st)}"
-
-            effect = st.get('Effect')
-            principal = st.get('Principal')
-            actions = st.get('Action')
-            resources = st.get('Resource')
-            conditions = st.get('Condition')
-
-            # Check for principal = "*"
-            if principal is None:
-                is_principal_star = False
-            elif principal == "*" or (isinstance(principal, dict) and "*" in str(principal)):
-                is_principal_star = True
-            else:
-                is_principal_star = False
-
-    #sometimes we get list and sometimes string, when we get string we are making it seingle element array so we can inject in DB
-            if isinstance(actions, str):
-                actions = [actions]
-            if isinstance(resources, str):
-                resources = [resources]
-
-            is_action_star = any(a == "*" or a.endswith(":*") for a in actions)
-
-            raw_statement = json.dumps(st)
-            scan_time = datetime.utcnow()
-
-            insert_query = """
-                INSERT INTO iam_policy_statements
-                (policy_arn, policy_name, statement_id, effect, principal, is_principal_star, is_action_star,
-                 actions, resources, conditions, raw_statement, scan_time)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (policy_arn, statement_id)
-                DO UPDATE SET
-                   policy_name = EXCLUDED.policy_name,
-                   effect = EXCLUDED.effect,
-                   principal = EXCLUDED.principal,
-                   is_principal_star = EXCLUDED.is_principal_star,
-                   is_action_star = EXCLUDED.is_action_star,
-                   actions = EXCLUDED.actions,
-                   resources = EXCLUDED.resources,
-                   conditions = EXCLUDED.conditions,
-                   raw_statement = EXCLUDED.raw_statement,
-                   scan_time = EXCLUDED.scan_time;
-            """
-
-            cur.execute(insert_query, (
-                policy_arn,
-                policy_name,
-                sid,
-                effect,
-                Json(principal) if principal else None,
-                is_principal_star,
-                is_action_star,
-                Json(actions),
-                Json(resources),
-                Json(conditions) if conditions else None,
-                raw_statement,
-                scan_time
-            ))
-
-            conn.commit()
-            print(f"✅ Inserted statement for policy: {policy_arn}")
-
-#    policy_list_local = [p["Arn"] for p in policy_st_allinfo]
-    delete_query = """
-    DELETE FROM iam_policy_statements
-    WHERE policy_arn NOT IN %s
-      AND policy_arn NOT LIKE 'arn:aws:iam::aws:policy/%%';
+    insert_query = """
+        INSERT INTO iam_policy_statements
+        (
+            policy_arn,
+            policy_name,
+            statement_id,
+            effect,
+            principal,
+            is_principal_star,
+            is_action_star,
+            actions,
+            resources,
+            conditions,
+            raw_statement,
+            scan_time
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (policy_arn, statement_id)
+        DO UPDATE SET
+            policy_name = EXCLUDED.policy_name,
+            effect = EXCLUDED.effect,
+            principal = EXCLUDED.principal,
+            is_principal_star = EXCLUDED.is_principal_star,
+            is_action_star = EXCLUDED.is_action_star,
+            actions = EXCLUDED.actions,
+            resources = EXCLUDED.resources,
+            conditions = EXCLUDED.conditions,
+            raw_statement = EXCLUDED.raw_statement,
+            scan_time = EXCLUDED.scan_time;
     """
-    cur.execute(delete_query, (tuple(policy_list_local),))
-    cur.close()
-    conn.close()
+
+    count = 0
+
+    try:
+        for policy_arn in policy_arns:
+
+            policy_detail = iam.get_policy(PolicyArn=policy_arn)
+            policy_name = policy_detail["Policy"]["PolicyName"]
+
+            version_id = policy_detail["Policy"]["DefaultVersionId"]
+
+            policy_version = iam.get_policy_version(
+                PolicyArn=policy_arn,
+                VersionId=version_id
+            )
+
+            statements = policy_version["PolicyVersion"]["Document"]["Statement"]
+
+            if not isinstance(statements, list):
+                statements = [statements]
+
+            for idx, st in enumerate(statements):
+
+                sid = st.get("Sid") or f"auto-{version_id}-{idx}"
+                effect = st.get("Effect")
+
+                principal = st.get("Principal")
+                actions = st.get("Action", [])
+                resources = st.get("Resource", [])
+                conditions = st.get("Condition")
+
+                # normalize
+                if isinstance(actions, str):
+                    actions = [actions]
+
+                if isinstance(resources, str):
+                    resources = [resources]
+
+                is_principal_star = (
+                    principal == "*"
+                    or (isinstance(principal, dict) and "*" in str(principal))
+                )
+
+                is_action_star = any(a == "*" or a.endswith(":*") for a in actions)
+
+                raw_statement = json.dumps(st)
+                scan_time = datetime.utcnow()
+
+                cur.execute(insert_query, (
+                    policy_arn,
+                    policy_name,
+                    sid,
+                    effect,
+                    Json(principal) if principal else None,
+                    is_principal_star,
+                    is_action_star,
+                    Json(actions),
+                    Json(resources),
+                    Json(conditions) if conditions else None,
+                    raw_statement,
+                    scan_time
+                ))
+
+                count += 1
+
+        conn.commit()
+        print(f"✅ Inserted {count} IAM policy statements")
+
+    except Exception as e:
+        conn.rollback()
+        print("❌ Insert failed:", e)
+
+    finally:
+        cur.close()
+        conn.close()
 
     return {
         "status": "success",
-        "total_cust_managed_policies": len(policy_list_local)
+        "count": count
     }
 
-# Allow direct run
+
 if __name__ == "__main__":
     collect_iampolicystatements_data()
