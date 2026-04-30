@@ -4,7 +4,7 @@ from models import Finding
 
 
 # -------------------------
-# CENTRAL RULE DEFINITIONS
+# RULE DEFINITIONS
 # -------------------------
 RULES = [
     {
@@ -36,7 +36,6 @@ RULES = [
 # -------------------------
 def make_finding(rule, service, resource_id):
     return {
-        "dedup_key": f"{service}-{resource_id}-{rule['id']}",
         "service": service,
         "resource_type": service,
         "resource_id": resource_id,
@@ -50,11 +49,17 @@ def make_finding(rule, service, resource_id):
 
 
 # -------------------------
-# SAVE TO DB (NEW FIX)
+# SAVE TO DB (FIXED)
 # -------------------------
 def save_finding_to_db(f):
 
-    existing = Finding.query.filter_by(dedup_key=f["dedup_key"]).first()
+    # SAFE DEDUP (ONLY USE EXISTING COLUMNS)
+    existing = Finding.query.filter_by(
+        service=f["service"],
+        resource_type=f["resource_type"],
+        resource_id=f["resource_id"],
+        finding=f["finding"]
+    ).first()
 
     if existing:
         return
@@ -72,7 +77,7 @@ def save_finding_to_db(f):
 
 
 # -------------------------
-# RULE ENGINE
+# RULE EVALUATION
 # -------------------------
 def evaluate_finding(resource_type, resource_id, attributes):
     findings = []
@@ -104,7 +109,7 @@ def evaluate_finding(resource_type, resource_id, attributes):
 
 
 # -------------------------
-# BATCH EVALUATOR (FIXED)
+# BATCH ENGINE (FIXED)
 # -------------------------
 def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
 
@@ -113,43 +118,44 @@ def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
     # ---------------- S3 ----------------
     if s3_data:
         for bucket in s3_data.get("records", []):
-            results = evaluate_finding(
-                "s3",
-                bucket.get("bucket_name"),
-                {
-                    "public_access": bucket.get("public_access")
-                }
+            all_findings.extend(
+                evaluate_finding(
+                    "s3",
+                    bucket.get("bucket_name"),
+                    {"public_access": bucket.get("public_access")}
+                )
             )
-            all_findings.extend(results)
 
     # ---------------- SG ----------------
     if sg_data:
         for sg in sg_data.get("records", []):
-            results = evaluate_finding(
-                "sg",
-                sg.get("group_id"),
-                {
-                    "inbound_rules": sg.get("inbound_rules", [])
-                }
+            all_findings.extend(
+                evaluate_finding(
+                    "sg",
+                    sg.get("group_id"),
+                    {"inbound_rules": sg.get("inbound_rules", [])}
+                )
             )
-            all_findings.extend(results)
 
     # ---------------- IAM ----------------
     if iam_data:
         for iam in iam_data.get("records", []):
-            results = evaluate_finding(
-                "iam_policy",
-                iam.get("policy_arn"),
-                {
-                    "is_action_star": iam.get("is_action_star", False)
-                }
+            all_findings.extend(
+                evaluate_finding(
+                    "iam_policy",
+                    iam.get("policy_arn"),
+                    {"is_action_star": iam.get("is_action_star", False)}
+                )
             )
-            all_findings.extend(results)
 
-    # ---------------- SAVE TO DB (CRITICAL FIX) ----------------
+    # ---------------- DB INSERT (SAFE) ----------------
     for f in all_findings:
         save_finding_to_db(f)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
     return all_findings
