@@ -111,7 +111,7 @@ def evaluate_all(ec2_data=None, sg_data=None, s3_data=None, iam_data=None):
 
     # ---------------- S3 ----------------
     if s3_data:
-        for bucket in s3_data.get("records", []):
+        for bucket in s3_data.get("data", []):
             all_findings.extend(
                 evaluate_finding(
                     "s3",
